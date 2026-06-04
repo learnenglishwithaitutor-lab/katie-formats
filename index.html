@@ -374,50 +374,7 @@
 </div>
 
 <script>
-const formats = [
-  {
-    title: "Stop saying 'in my opinion' — say this instead",
-    type: "Phrase upgrade", views: "292K",
-    badge: "rgba(29,158,117,0.15)", badgeText: "#1D9E75",
-    katie: "Katie AI teaches you what native speakers actually say — practice it daily",
-    url: "https://www.tiktok.com/@fluently.mey/video/7632033783469837598"
-  },
-  {
-    title: "Use modern English — nobody says this anymore",
-    type: "Vocabulary upgrade", views: "97.7K",
-    badge: "rgba(55,138,221,0.15)", badgeText: "#378ADD",
-    katie: "Practice modern phrases with Katie AI so they come out naturally",
-    url: "https://www.tiktok.com/@user_123a97/video/7383886098765432321"
-  },
-  {
-    title: "Bad at English? Try these",
-    type: "Tip listicle", views: "90.7K",
-    badge: "rgba(186,117,23,0.15)", badgeText: "#BA7517",
-    katie: "One of those tips: daily speaking practice. That's exactly what Katie AI is for",
-    url: "https://www.tiktok.com/@hallohelloann/video/7453834798765432321"
-  },
-  {
-    title: "Go phrasal verbs — used in real sentences",
-    type: "Phrasal verbs", views: "45.4K",
-    badge: "rgba(83,74,183,0.15)", badgeText: "#7F77DD",
-    katie: "Learn phrasal verbs in real context with Katie AI — not from a textbook",
-    url: "https://www.tiktok.com/@englicore1/video/7498123456789012345"
-  },
-  {
-    title: "Unlock fluency — what nobody tells you",
-    type: "Mindset / tips", views: "37.1K",
-    badge: "rgba(153,60,29,0.15)", badgeText: "#D85A30",
-    katie: "The real unlock is speaking more. Katie AI gives you a safe space to practice every day",
-    url: "https://www.tiktok.com/@alfisyahere/video/7497123456789012345"
-  },
-  {
-    title: "Very vs Too — you're using these wrong",
-    type: "Word confusion", views: "26K",
-    badge: "rgba(59,109,17,0.15)", badgeText: "#639922",
-    katie: "Make mistakes without judgment. Katie AI corrects you and explains why",
-    url: "https://www.tiktok.com/@comparelingo/video/7496123456789012345"
-  }
-];
+let formats = [];
 
 let current = 0;
 const approved = [], rejected = [];
@@ -550,8 +507,164 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
 }
 
-loadCard(0);
-updateDeck();
+function showStartScreen() {
+  document.getElementById('app').innerHTML = `
+    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,16px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;">
+      <div style="font-size:48px;">🎬</div>
+      <div>
+        <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;color:#1a1a1a;letter-spacing:-0.4px;">Format Review</h1>
+        <p style="font-size:14px;color:#888;margin:0;">Pull the latest videos from your tracked accounts and swipe to approve formats.</p>
+      </div>
+      <button onclick="fetchFromApify()" id="fetch-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;letter-spacing:-0.2px;">
+        Get fresh videos
+      </button>
+      <p style="font-size:12px;color:#aaa;margin:0;">Fetches last 5 days from @starvicks51, @fluently.kate, @lola_englishspeak, @keisha.learns</p>
+    </div>
+  `;
+}
+
+async function fetchFromApify() {
+  const btn = document.getElementById('fetch-btn');
+  if (btn) { btn.textContent = 'Starting scrape...'; btn.disabled = true; }
+
+  try {
+    // Start the run
+    const startRes = await fetch('/api/apify?action=start');
+    const startData = await startRes.json();
+    const runId = startData.runId;
+    if (!runId) throw new Error('Failed to start run');
+
+    // Poll for completion
+    let datasetId = null;
+    let attempts = 0;
+    while (attempts < 60) {
+      await new Promise(r => setTimeout(r, 5000));
+      attempts++;
+      const statusRes = await fetch(\`/api/apify?action=status&runId=\${runId}\`);
+      const statusData = await statusRes.json();
+      if (btn) btn.textContent = \`Scraping... (\${attempts * 5}s)\`;
+      if (statusData.status === 'SUCCEEDED') {
+        datasetId = statusData.datasetId;
+        break;
+      }
+      if (statusData.status === 'FAILED' || statusData.status === 'ABORTED') {
+        throw new Error('Apify run failed');
+      }
+    }
+
+    if (!datasetId) throw new Error('Timed out waiting for results');
+
+    // Fetch results
+    if (btn) btn.textContent = 'Loading videos...';
+    const resultsRes = await fetch(\`/api/apify?action=results&datasetId=\${datasetId}\`);
+    const resultsData = await resultsRes.json();
+
+    if (!resultsData.videos || resultsData.videos.length === 0) {
+      throw new Error('No videos found in last 5 days');
+    }
+
+    // Map to formats structure
+    formats = resultsData.videos.map(v => ({
+      title: v.title.slice(0, 80),
+      views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : v.views.toString(),
+      url: v.url,
+      thumbnail: v.thumbnail,
+      author: v.author,
+      badge: 'rgba(29,158,117,0.12)',
+      badgeText: '#1D9E75',
+      katie: ''
+    }));
+
+    // Rebuild the app UI
+    document.getElementById('app').innerHTML = \`
+      <div class="header">
+        <h1>Format review</h1>
+        <span class="counter" id="counter">1 / \${formats.length}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress" style="width:\${100/formats.length}%"></div></div>
+      <div class="card-area" id="card-area">
+        <div class="card-stack">
+          <div class="deck-card deck-card-3" id="deck-3"></div>
+          <div class="deck-card deck-card-2" id="deck-2"></div>
+          <div class="card" id="card">
+            <div class="stamp approve" id="stamp-a">APPROVE</div>
+            <div class="stamp reject" id="stamp-r">SKIP</div>
+            <div class="card-bg-overlay" id="bg-overlay"></div>
+            <div class="video-frame" id="video-frame">
+              <div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>
+            </div>
+            <div class="meta" id="meta"></div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-reject" onclick="swipe('left')">✕ Skip</button>
+        <button class="btn btn-approve" onclick="swipe('right')">✓ Approve</button>
+      </div>
+    \`;
+
+    // Re-attach touch events
+    attachTouchEvents();
+    current = 0;
+    approved.length = 0;
+    rejected.length = 0;
+    loadCard(0);
+
+  } catch (err) {
+    document.getElementById('app').innerHTML = \`
+      <div style="display:flex;flex-direction:column;height:100dvh;align-items:center;justify-content:center;padding:2rem;text-align:center;font-family:-apple-system,sans-serif;gap:1rem;">
+        <p style="font-size:16px;color:#E24B4A;font-weight:600;">Something went wrong</p>
+        <p style="font-size:13px;color:#888;">\${err.message}</p>
+        <button onclick="showStartScreen()" style="padding:12px 24px;border-radius:12px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Try again</button>
+      </div>
+    \`;
+  }
+}
+
+function attachTouchEvents() {
+  const card = document.getElementById('card');
+  if (!card) return;
+  card.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    isDragging = true;
+    dragX = 0;
+  }, { passive: true });
+  card.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    dragX = e.touches[0].clientX - startX;
+    const dragY = e.touches[0].clientY - startY;
+    if (Math.abs(dragX) < Math.abs(dragY) && Math.abs(dragX) < 10) return;
+    card.style.transform = \`translateX(\${dragX}px) rotate(\${dragX * 0.06}deg)\`;
+    const progress = Math.abs(dragX) > 30 ? Math.min((Math.abs(dragX) - 30) / 70, 1) : 0;
+    const sa = document.getElementById('stamp-a');
+    const sr = document.getElementById('stamp-r');
+    if (sa) sa.style.opacity = dragX > 30 ? progress : 0;
+    if (sr) sr.style.opacity = dragX < -30 ? progress : 0;
+    const overlay = document.getElementById('bg-overlay');
+    if (overlay) {
+      overlay.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent';
+      overlay.style.opacity = progress;
+    }
+  }, { passive: true });
+  card.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (dragX > 80) swipe('right');
+    else if (dragX < -80) swipe('left');
+    else {
+      card.style.transform = '';
+      const sa = document.getElementById('stamp-a');
+      const sr = document.getElementById('stamp-r');
+      const ov = document.getElementById('bg-overlay');
+      if (sa) sa.style.opacity = 0;
+      if (sr) sr.style.opacity = 0;
+      if (ov) ov.style.opacity = 0;
+    }
+  });
+}
+
+showStartScreen();
 </script>
 </body>
 </html>
