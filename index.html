@@ -345,7 +345,7 @@ async function loadCard(idx) {
       <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
-    <div class="views">♥ ${f.views} likes</div>
+    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments</div>
   `;
 
   if (f.thumbnail) {
@@ -482,6 +482,7 @@ async function triggerRefresh() {
     formats = resultsData.videos.map(v => ({
       title:     v.title || 'No caption',
       views:     v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
+      comments:  v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
       url:       v.url,
       thumbnail: v.thumbnail,
       author:    v.author,
