@@ -96,8 +96,7 @@
 
     .card {
       position: absolute;
-      top: 0; left: 0; right: 0;
-      bottom: 0;
+      top: 20px; left: 0; right: 0; bottom: 0;
       background: var(--surface);
       border: 0.5px solid var(--border);
       border-radius: 20px;
@@ -108,7 +107,6 @@
       will-change: transform;
       transition: transform 0.08s ease;
       z-index: 2;
-      transform-origin: bottom center;
     }
 
     .card.animating {
@@ -120,23 +118,20 @@
 
     .deck-card {
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
       background: var(--surface);
       border: 0.5px solid var(--border);
       border-radius: 20px;
       pointer-events: none;
-      transform-origin: bottom center;
-      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
     }
 
     .deck-card-2 {
-      transform: translateY(10px) scale(0.95);
+      top: 10px; left: 8px; right: 8px; bottom: 0;
       opacity: 0.55;
       z-index: 1;
     }
 
     .deck-card-3 {
-      transform: translateY(18px) scale(0.90);
+      top: 0px; left: 16px; right: 16px; bottom: 0;
       opacity: 0.3;
       z-index: 0;
     }
