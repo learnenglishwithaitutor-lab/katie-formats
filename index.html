@@ -10,283 +10,104 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- v11 -->
+  <!-- v13 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg: #F0EEE9;
-      --surface: #FFFFFF;
-      --border: rgba(0,0,0,0.08);
-      --text: #1a1a1a;
-      --muted: #888;
-      --approve: #1D9E75;
-      --approve-bg: rgba(29,158,117,0.1);
-      --reject: #E24B4A;
-      --reject-bg: rgba(226,75,74,0.1);
+      --bg: #F0EEE9; --surface: #FFFFFF;
+      --border: rgba(0,0,0,0.08); --text: #1a1a1a; --muted: #888;
+      --approve: #1D9E75; --approve-bg: rgba(29,158,117,0.1);
+      --reject: #E24B4A;  --reject-bg:  rgba(226,75,74,0.1);
     }
-
     html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
+      height: 100%; background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
-      overflow: hidden;
-      -webkit-tap-highlight-color: transparent;
+      overflow: hidden; -webkit-tap-highlight-color: transparent;
     }
-
     .app {
-      display: flex;
-      flex-direction: column;
-      height: 100dvh;
-      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 20px);
-      max-width: 480px;
-      margin: 0 auto;
+      display: flex; flex-direction: column; height: 100dvh;
+      padding: env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,20px);
+      max-width: 480px; margin: 0 auto;
     }
 
-    /* ── Header ── */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding: 12px 0 10px;
-      flex-shrink: 0;
-    }
-    .header-left h1 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.2px;
-    }
-    .header-left .total-count {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-    .header-right {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 3px;
-    }
-    .refresh-btn {
-      background: none; border: none; cursor: pointer;
-      padding: 0; display: flex; align-items: center; gap: 4px;
-      color: var(--text); font-size: 13px; font-weight: 500; font-family: inherit;
-    }
+    /* Header */
+    .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0 10px; flex-shrink: 0; }
+    .header-left h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+    .header-left .total-count { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .header-right { display: flex; align-items: flex-start; gap: 10px; }
+    .header-right-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .icon-btn { background: none; border: none; cursor: pointer; padding: 2px; font-size: 17px; line-height: 1; color: var(--muted); }
+    .icon-btn:active { opacity: 0.5; }
+    .refresh-btn { background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px; color: var(--text); font-size: 13px; font-weight: 500; font-family: inherit; }
     .refresh-btn:active { opacity: 0.5; }
     .refresh-icon { font-size: 16px; line-height: 1; display: inline-block; }
     @keyframes spin-icon { to { transform: rotate(360deg); } }
     .refresh-icon.spinning { animation: spin-icon 0.8s linear infinite; }
     .last-pulled { font-size: 10px; color: var(--muted); }
-    .settings-btn {
-      background: none; border: none; cursor: pointer;
-      padding: 0; font-size: 18px; line-height: 1;
-      color: var(--muted); margin-left: 6px;
-    }
-    .settings-btn:active { opacity: 0.5; }
 
-    /* Settings screen */
-    .settings-screen {
-      display: flex; flex-direction: column;
-      flex: 1; min-height: 0;
-    }
-    .settings-title {
-      font-size: 15px; font-weight: 600;
-      letter-spacing: -0.2px; margin-bottom: 4px;
-    }
-    .settings-sub {
-      font-size: 12px; color: var(--muted); margin-bottom: 16px;
-    }
-    .accounts-list {
-      display: flex; flex-direction: column; gap: 8px;
-      overflow-y: auto; flex: 1; margin-bottom: 16px;
-    }
-    .account-row {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--surface); border: 0.5px solid var(--border);
-      border-radius: 12px; padding: 10px 12px;
-    }
-    .account-handle {
-      flex: 1; font-size: 13px; font-weight: 500; color: var(--text);
-    }
-    .account-url {
-      font-size: 10px; color: var(--muted);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      max-width: 140px;
-    }
-    .remove-btn {
-      background: none; border: none; cursor: pointer;
-      font-size: 18px; color: var(--muted); padding: 0; line-height: 1;
-      flex-shrink: 0;
-    }
-    .remove-btn:active { color: var(--reject); }
-    .add-account-row {
-      display: flex; gap: 8px; align-items: center;
-      margin-bottom: 16px;
-    }
-    .add-input {
-      flex: 1; padding: 12px 14px;
-      border: 0.5px solid var(--border); border-radius: 12px;
-      font-size: 13px; font-family: inherit; background: var(--surface);
-      color: var(--text); outline: none;
-    }
-    .add-input:focus { border-color: var(--approve); }
-    .add-input::placeholder { color: var(--muted); }
-    .add-btn {
-      padding: 12px 16px; border-radius: 12px;
-      font-size: 13px; font-weight: 600; font-family: inherit;
-      border: none; background: var(--approve); color: #fff; cursor: pointer;
-      flex-shrink: 0;
-    }
-    .add-btn:active { opacity: 0.8; }
-    .back-btn {
-      width: 100%; padding: 14px; border-radius: 14px;
-      font-size: 15px; font-weight: 600; font-family: inherit;
-      border: 0.5px solid var(--border); background: var(--surface);
-      color: var(--text); cursor: pointer; flex-shrink: 0;
-    }
+    /* Progress */
+    .progress-bar { height: 2px; background: rgba(0,0,0,0.06); border-radius: 2px; margin-bottom: 12px; flex-shrink: 0; }
+    .progress-fill { height: 100%; background: var(--approve); border-radius: 2px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
 
-    /* ── Progress ── */
-    .progress-bar {
-      height: 2px;
-      background: rgba(0,0,0,0.06);
-      border-radius: 2px;
-      margin-bottom: 12px;
-      flex-shrink: 0;
-    }
-    .progress-fill {
-      height: 100%;
-      background: var(--approve);
-      border-radius: 2px;
-      transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
-    }
-
-    /* ── Card area — takes all remaining space ── */
-    .card-area {
-      flex: 1;
-      position: relative;
-      min-height: 0;
-    }
-    .card-stack {
-      position: absolute;
-      top: 0; bottom: 0;
-      left: 10px; right: 10px;
-    }
+    /* Card area */
+    .card-area { flex: 1; position: relative; min-height: 0; }
+    .card-stack { position: absolute; top: 0; bottom: 0; left: 10px; right: 10px; }
     .card {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: var(--surface);
-      border: 0.5px solid var(--border);
-      border-radius: 20px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      touch-action: none;
-      will-change: transform;
-      z-index: 2;
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: 20px; overflow: hidden; display: flex; flex-direction: column;
+      touch-action: none; will-change: transform; z-index: 2;
       box-shadow: 8px 8px 0 0 #ddd8ce, 14px 14px 0 0 #d0cbc0;
     }
-    .card.animating {
-      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.38s ease;
-    }
+    .card.animating { transition: transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.38s ease; }
     .card.fly-right { transform: translateX(110%) rotate(12deg) !important; opacity: 0; }
     .card.fly-left  { transform: translateX(-110%) rotate(-12deg) !important; opacity: 0; }
-
     .deck-card { position: absolute; background: var(--surface); border: 0.5px solid var(--border); border-radius: 20px; pointer-events: none; }
-    .deck-card-2 { top: 10px; left: 8px; right: 8px; bottom: 0; opacity: 0.55; z-index: 1; }
+    .deck-card-2 { top: 10px; left: 8px;  right: 8px;  bottom: 0; opacity: 0.55; z-index: 1; }
     .deck-card-3 { top: 0;   left: 16px; right: 16px; bottom: 0; opacity: 0.3;  z-index: 0; }
 
-    /* ── Video ── */
-    .video-frame {
-      flex: 1;
-      min-height: 0;
-      background: #ebebeb;
-      position: relative;
-    }
-    .video-loading {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 10px; color: var(--muted); font-size: 13px;
-    }
-    .video-loading .spinner {
-      width: 24px; height: 24px;
-      border: 2px solid rgba(0,0,0,0.08);
-      border-top-color: var(--approve);
-      border-radius: 50%;
-      animation: spin-icon 0.8s linear infinite;
-    }
-    .watch-link {
-      color: #5DCAA5; font-size: 12px; text-decoration: none;
-      padding: 6px 14px; border: 0.5px solid #5DCAA5;
-      border-radius: 999px; margin-top: 6px;
-    }
+    /* Video */
+    .video-frame { flex: 1; min-height: 0; background: #ebebeb; position: relative; }
+    .video-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px; }
+    .video-loading .spinner { width: 24px; height: 24px; border: 2px solid rgba(0,0,0,0.08); border-top-color: var(--approve); border-radius: 50%; animation: spin-icon 0.8s linear infinite; }
+    .watch-link { color: #5DCAA5; font-size: 12px; text-decoration: none; padding: 6px 14px; border: 0.5px solid #5DCAA5; border-radius: 999px; margin-top: 6px; }
 
-    /* ── Meta ── */
-    .meta {
-      padding: 12px 14px 16px;
-      flex-shrink: 0;
-      border-top: 0.5px solid var(--border);
-      background: var(--surface);
-    }
-    .meta-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-    .meta-top-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .badge {
-      font-size: 10px; font-weight: 600;
-      letter-spacing: 0.3px; text-transform: uppercase;
-      padding: 3px 9px; border-radius: 999px;
-      background: rgba(29,158,117,0.12); color: #1D9E75;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .posted-date {
-      font-size: 11px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-    .comments-link {
-      font-size: 12px; color: #5DCAA5;
-      text-decoration: none; font-weight: 500;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .card-title {
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.5;
-      color: var(--text);
-      word-break: break-word;
-      /* No truncation — show full caption */
-    }
-    .views {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
+    /* Meta */
+    .meta { padding: 12px 14px 16px; flex-shrink: 0; border-top: 0.5px solid var(--border); background: var(--surface); }
+    .meta-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+    .meta-top-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .badge { font-size: 10px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: rgba(29,158,117,0.12); color: #1D9E75; white-space: nowrap; flex-shrink: 0; }
+    .posted-date { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .comments-link { font-size: 12px; color: #5DCAA5; text-decoration: none; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+    .card-title { font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--text); word-break: break-word; }
+    .views { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
-    /* ── Stamps ── */
-    .stamp {
-      position: absolute; top: 28px;
-      font-size: 28px; font-weight: 900;
-      padding: 8px 16px; border-radius: 8px;
-      opacity: 0; pointer-events: none;
-      z-index: 10; letter-spacing: 3px; text-transform: uppercase;
-    }
+    /* Stamps */
+    .stamp { position: absolute; top: 28px; font-size: 28px; font-weight: 900; padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; z-index: 10; letter-spacing: 3px; text-transform: uppercase; }
     .stamp.approve { left: 18px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
     .stamp.reject  { right: 18px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg);  background: rgba(255,255,255,0.9); }
     .card-bg-overlay { position: absolute; inset: 0; border-radius: 20px; pointer-events: none; z-index: 1; opacity: 0; }
 
-    /* ── Done ── */
-    .done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1rem; overflow-y: auto; gap: 0; }
+    /* Settings screen */
+    .settings-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; padding-top: 4px; }
+    .settings-section-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .accounts-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; margin-bottom: 16px; }
+    .account-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .account-info { flex: 1; min-width: 0; }
+    .account-handle { font-size: 13px; font-weight: 600; color: var(--text); }
+    .account-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .remove-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); padding: 0; line-height: 1; flex-shrink: 0; }
+    .remove-btn:active { color: var(--reject); }
+    .add-row { display: flex; gap: 8px; margin-bottom: 16px; flex-shrink: 0; }
+    .add-input { flex: 1; padding: 12px 14px; border: 0.5px solid var(--border); border-radius: 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; }
+    .add-input:focus { border-color: var(--approve); }
+    .add-input::placeholder { color: var(--muted); }
+    .add-btn { padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; font-family: inherit; border: none; background: var(--approve); color: #fff; cursor: pointer; flex-shrink: 0; }
+    .add-btn:active { opacity: 0.8; }
+    .back-btn { width: 100%; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600; font-family: inherit; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; }
+
+    /* Done */
+    .done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1rem; overflow-y: auto; }
     .done .check { font-size: 48px; margin-bottom: 12px; }
     .done h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.4px; }
     .done > p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
@@ -312,6 +133,37 @@ let current = 0;
 const approved = [], rejected = [];
 let startX = 0, startY = 0, isDragging = false, dragX = 0;
 
+const DEFAULT_ACCOUNTS = [
+  'https://www.tiktok.com/@starvicks51',
+  'https://www.tiktok.com/@fluently.kate',
+  'https://www.tiktok.com/@lola_englishspeak',
+  'https://www.tiktok.com/@keisha.learns'
+];
+
+// ── Accounts ──────────────────────────────────────────────────
+function loadAccounts() {
+  try {
+    const a = localStorage.getItem('kf_accounts');
+    if (a) return JSON.parse(a);
+  } catch(e) {}
+  return [...DEFAULT_ACCOUNTS];
+}
+function saveAccounts(accounts) {
+  localStorage.setItem('kf_accounts', JSON.stringify(accounts));
+}
+function normaliseUrl(input) {
+  input = input.trim();
+  // Accept @handle, handle, or full URL
+  if (input.startsWith('https://www.tiktok.com/')) return input;
+  if (input.startsWith('@')) return 'https://www.tiktok.com/' + input;
+  if (input.includes('tiktok.com/')) return 'https://' + input.replace(/^https?:\/\//, '');
+  return 'https://www.tiktok.com/@' + input.replace(/^@/, '');
+}
+function handleFromUrl(url) {
+  const m = url.match(/@([^/?]+)/);
+  return m ? '@' + m[1] : url;
+}
+
 // ── Cache ──────────────────────────────────────────────────────
 function saveCache(videos) {
   localStorage.setItem('kf_videos', JSON.stringify(videos));
@@ -334,116 +186,94 @@ function formatPosted(iso) {
   if (!iso) return null;
   const d = new Date(iso);
   if (isNaN(d)) return null;
-  const diffDays = Math.floor((Date.now() - d) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor((Date.now() - d) / 86400000);
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7)  return diffDays + 'd ago';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-// ── Accounts ───────────────────────────────────────────────────
-const DEFAULT_ACCOUNTS = [
-  'https://www.tiktok.com/@starvicks51',
-  'https://www.tiktok.com/@fluently.kate',
-  'https://www.tiktok.com/@lola_englishspeak',
-  'https://www.tiktok.com/@keisha.learns'
-];
-
-function loadAccounts() {
-  try {
-    const a = localStorage.getItem('kf_accounts');
-    if (a) return JSON.parse(a);
-  } catch(e) {}
-  return [...DEFAULT_ACCOUNTS];
-}
-
-function saveAccounts(accounts) {
-  localStorage.setItem('kf_accounts', JSON.stringify(accounts));
-}
-
-function normalizeHandle(input) {
-  input = input.trim();
-  // Already a full URL
-  if (input.startsWith('https://www.tiktok.com/')) return input;
-  // @handle or handle
-  const handle = input.replace(/^@/, '');
-  return `https://www.tiktok.com/@${handle}`;
-}
-
-function handleFromUrl(url) {
-  const m = url.match(/tiktok\.com\/@([^/?]+)/);
-  return m ? '@' + m[1] : url;
-}
-
-function showSettings() {
-  const accounts = loadAccounts();
-  const pulled = localStorage.getItem('kf_pulled');
-
-  document.getElementById('app').innerHTML = `
+// ── Header ─────────────────────────────────────────────────────
+function headerHTML(pulledAt, showCount) {
+  return `
     <div class="header">
       <div class="header-left">
-        <h1>Accounts</h1>
-        <div class="total-count">${accounts.length} tracked</div>
+        <h1>Format review</h1>
+        ${showCount ? `<div class="total-count" id="total-count">${formats.length} videos to review</div>` : ''}
       </div>
-      <div class="header-right" style="justify-content:center;">
-        <button class="settings-btn" onclick="goBack()" style="font-size:14px;color:var(--text);font-weight:500;font-family:inherit;">✕ Close</button>
+      <div class="header-right">
+        <button class="icon-btn" onclick="showSettings()" title="Manage accounts">⚙️</button>
+        <div class="header-right-inner">
+          <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
+            <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
+          </button>
+          <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
+        </div>
       </div>
-    </div>
-    <div class="settings-screen">
-      <p class="settings-sub">Add any TikTok account. Next time you Refresh, videos from all accounts below will be pulled.</p>
-      <div class="add-account-row">
-        <input class="add-input" id="account-input" type="text" placeholder="@handle or tiktok.com/@handle" autocomplete="off" autocorrect="off" autocapitalize="off" />
-        <button class="add-btn" onclick="addAccount()">Add</button>
-      </div>
-      <div class="accounts-list" id="accounts-list">
-        ${renderAccountRows(accounts)}
-      </div>
-      <button class="back-btn" onclick="goBack()">← Back to review</button>
     </div>
   `;
+}
 
-  // Allow Enter key to add
-  document.getElementById('account-input').addEventListener('keydown', e => {
+// ── Settings screen ────────────────────────────────────────────
+function showSettings() {
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, false)}
+    <div class="settings-screen">
+      <div class="settings-section-title">Tracked accounts</div>
+      <div class="accounts-list" id="accounts-list"></div>
+      <div class="add-row">
+        <input class="add-input" id="add-input" type="url" inputmode="url"
+          placeholder="@handle or tiktok.com/@handle" />
+        <button class="add-btn" onclick="addAccount()">Add</button>
+      </div>
+      <button class="back-btn" onclick="goBack()">← Done</button>
+    </div>
+  `;
+  renderAccountsList();
+  // Allow pressing Enter to add
+  document.getElementById('add-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') addAccount();
   });
 }
 
-function renderAccountRows(accounts) {
-  if (accounts.length === 0) return `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0;">No accounts yet. Add one above.</p>`;
-  return accounts.map((url, i) => `
+function renderAccountsList() {
+  const accounts = loadAccounts();
+  const list = document.getElementById('accounts-list');
+  if (!list) return;
+  if (accounts.length === 0) {
+    list.innerHTML = `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0;">No accounts yet. Add one above.</p>`;
+    return;
+  }
+  list.innerHTML = accounts.map((url, i) => `
     <div class="account-row">
-      <div style="flex:1;min-width:0;">
+      <div class="account-info">
         <div class="account-handle">${handleFromUrl(url)}</div>
         <div class="account-url">${url}</div>
       </div>
-      <button class="remove-btn" onclick="removeAccount(${i})">×</button>
+      <button class="remove-btn" onclick="removeAccount(${i})" title="Remove">×</button>
     </div>
   `).join('');
 }
 
 function addAccount() {
-  const input = document.getElementById('account-input');
-  const val = input.value.trim();
-  if (!val) return;
-  const url = normalizeHandle(val);
+  const input = document.getElementById('add-input');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const url = normaliseUrl(raw);
   const accounts = loadAccounts();
-  if (accounts.includes(url)) {
-    input.value = '';
-    return;
-  }
+  if (accounts.includes(url)) { input.value = ''; return; }
   accounts.push(url);
   saveAccounts(accounts);
   input.value = '';
-  document.getElementById('accounts-list').innerHTML = renderAccountRows(accounts);
-  document.querySelector('.total-count').textContent = accounts.length + ' tracked';
+  renderAccountsList();
 }
 
 function removeAccount(idx) {
   const accounts = loadAccounts();
   accounts.splice(idx, 1);
   saveAccounts(accounts);
-  document.getElementById('accounts-list').innerHTML = renderAccountRows(accounts);
-  document.querySelector('.total-count').textContent = accounts.length + ' tracked';
+  renderAccountsList();
 }
 
 function goBack() {
@@ -455,34 +285,12 @@ function goBack() {
     showEmptyState();
   }
 }
-function headerHTML(pulledAt) {
-  return `
-    <div class="header">
-      <div class="header-left">
-        <h1>Format review</h1>
-        <div class="total-count" id="total-count">${formats.length} videos to review</div>
-      </div>
-      <div class="header-right">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
-            <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
-          </button>
-          <button class="settings-btn" onclick="showSettings()" title="Manage accounts">⚙️</button>
-        </div>
-        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
-      </div>
-    </div>
-  `;
-}
 
 // ── Card UI ────────────────────────────────────────────────────
 function showCardUI(pulledAt) {
-  current = 0;
-  approved.length = 0;
-  rejected.length = 0;
-
+  current = 0; approved.length = 0; rejected.length = 0;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulledAt)}
+    ${headerHTML(pulledAt, true)}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -505,32 +313,26 @@ function showCardUI(pulledAt) {
 }
 
 async function loadCard(idx) {
-  const vf   = document.getElementById('video-frame');
+  const vf = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
   const prog = document.getElementById('progress');
   const tc   = document.getElementById('total-count');
-  const f    = formats[idx];
-
+  const f = formats[idx];
   if (prog) prog.style.width = `${((idx+1)/formats.length)*100}%`;
   if (tc)   tc.textContent   = `${idx+1} / ${formats.length} videos`;
-
   vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>';
-
   const postedStr  = formatPosted(f.created);
-  const postedHTML = postedStr ? `<span class="posted-date">${postedStr}</span>` : '';
-
   meta.innerHTML = `
     <div class="meta-top">
       <div class="meta-top-left">
         <span class="badge">@${f.author || 'tiktok'}</span>
-        ${postedHTML}
+        ${postedStr ? `<span class="posted-date">${postedStr}</span>` : ''}
       </div>
       <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
     <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments</div>
   `;
-
   if (f.thumbnail) {
     showThumb(vf, f.thumbnail, f.url);
   } else {
@@ -555,7 +357,6 @@ function showThumb(vf, thumb, url) {
       </div>
     </a>`;
 }
-
 function showFallback(vf, url) {
   vf.innerHTML = `<div class="video-loading"><span>Preview unavailable</span><a class="watch-link" href="${url}" target="_blank">Watch on TikTok →</a></div>`;
 }
@@ -582,7 +383,7 @@ function swipe(dir) {
 function showDone() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled)}
+    ${headerHTML(pulled, false)}
     <div class="done">
       <div class="check">✓</div>
       <h2>Review complete</h2>
@@ -597,25 +398,17 @@ function showDone() {
         </div>
         <button class="btn-generate" onclick="alert('Script generation coming soon.')">Generate scripts →</button>
       ` : '<p style="color:var(--muted);font-size:14px">No formats approved this round.</p>'}
-      <button class="btn-again" onclick="startReview()">Review again</button>
+      <button class="btn-again" onclick="goBack()">Review again</button>
     </div>
   `;
 }
 
-function startReview() {
-  const cache = loadCache();
-  if (cache && cache.videos.length > 0) {
-    formats = cache.videos;
-    showCardUI(cache.pulled);
-  } else {
-    showEmptyState();
-  }
-}
-
 // ── Empty state ────────────────────────────────────────────────
 function showEmptyState() {
+  const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,20px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
+    ${headerHTML(pulled, false)}
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
       <div style="font-size:48px;">🎬</div>
       <div>
         <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-0.4px;">Format Review</h1>
@@ -624,8 +417,6 @@ function showEmptyState() {
       <button onclick="triggerRefresh()" id="refresh-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;font-family:inherit;">
         Get fresh videos
       </button>
-      <button onclick="showSettings()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);font-family:inherit;padding:4px;">⚙️ Manage accounts</button>
-      <p style="font-size:12px;color:#aaa;margin:0;">@starvicks51 · @fluently.kate · @lola_englishspeak · @keisha.learns</p>
     </div>
   `;
 }
@@ -635,6 +426,12 @@ async function triggerRefresh() {
   const icon      = document.getElementById('refresh-icon');
   const btn       = document.getElementById('refresh-btn');
   const lastLabel = document.getElementById('last-pulled');
+  const accounts  = loadAccounts();
+
+  if (accounts.length === 0) {
+    alert('No accounts to scrape. Add some in ⚙️ Settings first.');
+    return;
+  }
 
   if (icon) icon.classList.add('spinning');
   if (btn)  btn.disabled = true;
@@ -644,10 +441,10 @@ async function triggerRefresh() {
     const startRes  = await fetch('/api/apify?action=start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profiles: loadAccounts() })
+      body: JSON.stringify({ profiles: accounts })
     });
     const startData = await startRes.json();
-    const runId     = startData.runId;
+    const runId = startData.runId;
     if (!runId) throw new Error('Failed to start Apify run');
 
     let datasetId = null, attempts = 0;
@@ -665,16 +462,16 @@ async function triggerRefresh() {
     if (lastLabel) lastLabel.textContent = 'Loading videos...';
     const resultsRes  = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
-    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found');
+    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in last 5 days');
 
     formats = resultsData.videos.map(v => ({
-      title:     v.title || 'No caption',
-      views:     v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
-      comments:  v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
-      url:       v.url,
-      thumbnail: v.thumbnail,
-      author:    v.author,
-      created:   v.created
+      title:    v.title || 'No caption',
+      views:    v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
+      comments: v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
+      url:      v.url,
+      thumbnail:v.thumbnail,
+      author:   v.author,
+      created:  v.created
     }));
 
     saveCache(formats);

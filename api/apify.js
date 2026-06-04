@@ -12,14 +12,13 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, runId, datasetId } = req.query;
 
   try {
     if (action === 'start') {
-      // Accept profiles from request body, fall back to defaults
+      // Accept profiles from POST body, fall back to defaults
       let profiles = DEFAULT_PROFILES;
       if (req.method === 'POST' && req.body?.profiles?.length > 0) {
         profiles = req.body.profiles;
