@@ -540,9 +540,9 @@ async function fetchFromApify() {
     while (attempts < 60) {
       await new Promise(r => setTimeout(r, 5000));
       attempts++;
-      const statusRes = await fetch(\`/api/apify?action=status&runId=\${runId}\`);
+      const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
       const statusData = await statusRes.json();
-      if (btn) btn.textContent = \`Scraping... (\${attempts * 5}s)\`;
+      if (btn) btn.textContent = `Scraping... (${attempts * 5}s)`;
       if (statusData.status === 'SUCCEEDED') {
         datasetId = statusData.datasetId;
         break;
@@ -556,7 +556,7 @@ async function fetchFromApify() {
 
     // Fetch results
     if (btn) btn.textContent = 'Loading videos...';
-    const resultsRes = await fetch(\`/api/apify?action=results&datasetId=\${datasetId}\`);
+    const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
 
     if (!resultsData.videos || resultsData.videos.length === 0) {
@@ -576,12 +576,12 @@ async function fetchFromApify() {
     }));
 
     // Rebuild the app UI
-    document.getElementById('app').innerHTML = \`
+    document.getElementById('app').innerHTML = `
       <div class="header">
         <h1>Format review</h1>
-        <span class="counter" id="counter">1 / \${formats.length}</span>
+        <span class="counter" id="counter">1 / ${formats.length}</span>
       </div>
-      <div class="progress-bar"><div class="progress-fill" id="progress" style="width:\${100/formats.length}%"></div></div>
+      <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
       <div class="card-area" id="card-area">
         <div class="card-stack">
           <div class="deck-card deck-card-3" id="deck-3"></div>
@@ -601,7 +601,7 @@ async function fetchFromApify() {
         <button class="btn btn-reject" onclick="swipe('left')">✕ Skip</button>
         <button class="btn btn-approve" onclick="swipe('right')">✓ Approve</button>
       </div>
-    \`;
+    `;
 
     // Re-attach touch events
     attachTouchEvents();
@@ -611,13 +611,13 @@ async function fetchFromApify() {
     loadCard(0);
 
   } catch (err) {
-    document.getElementById('app').innerHTML = \`
+    document.getElementById('app').innerHTML = `
       <div style="display:flex;flex-direction:column;height:100dvh;align-items:center;justify-content:center;padding:2rem;text-align:center;font-family:-apple-system,sans-serif;gap:1rem;">
         <p style="font-size:16px;color:#E24B4A;font-weight:600;">Something went wrong</p>
-        <p style="font-size:13px;color:#888;">\${err.message}</p>
+        <p style="font-size:13px;color:#888;">${err.message}</p>
         <button onclick="showStartScreen()" style="padding:12px 24px;border-radius:12px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Try again</button>
       </div>
-    \`;
+    `;
   }
 }
 
@@ -635,7 +635,7 @@ function attachTouchEvents() {
     dragX = e.touches[0].clientX - startX;
     const dragY = e.touches[0].clientY - startY;
     if (Math.abs(dragX) < Math.abs(dragY) && Math.abs(dragX) < 10) return;
-    card.style.transform = \`translateX(\${dragX}px) rotate(\${dragX * 0.06}deg)\`;
+    card.style.transform = `translateX(${dragX}px) rotate(${dragX * 0.06}deg)`;
     const progress = Math.abs(dragX) > 30 ? Math.min((Math.abs(dragX) - 30) / 70, 1) : 0;
     const sa = document.getElementById('stamp-a');
     const sr = document.getElementById('stamp-r');
