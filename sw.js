@@ -1,4 +1,4 @@
-const CACHE = 'katie-formats-v11';
+const CACHE = 'katie-formats-v12';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

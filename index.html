@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- v10 -->
+  <!-- v11 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -39,17 +39,16 @@
       display: flex;
       flex-direction: column;
       height: 100dvh;
-      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
-      overflow: visible;
+      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 20px);
       max-width: 480px;
       margin: 0 auto;
     }
 
-    /* Header */
+    /* ── Header ── */
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       padding: 12px 0 10px;
       flex-shrink: 0;
     }
@@ -61,39 +60,31 @@
     .header-left .total-count {
       font-size: 11px;
       color: var(--muted);
-      margin-top: 1px;
+      margin-top: 2px;
     }
     .header-right {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 2px;
+      gap: 3px;
     }
     .refresh-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 2px 0;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 500;
-      font-family: inherit;
+      background: none; border: none; cursor: pointer;
+      padding: 0; display: flex; align-items: center; gap: 4px;
+      color: var(--text); font-size: 13px; font-weight: 500; font-family: inherit;
     }
     .refresh-btn:active { opacity: 0.5; }
-    .refresh-icon { font-size: 17px; line-height: 1; display: inline-block; }
+    .refresh-icon { font-size: 16px; line-height: 1; display: inline-block; }
     @keyframes spin-icon { to { transform: rotate(360deg); } }
     .refresh-icon.spinning { animation: spin-icon 0.8s linear infinite; }
-    .last-pulled { font-size: 10px; color: var(--muted); text-align: right; }
+    .last-pulled { font-size: 10px; color: var(--muted); }
 
-    /* Progress */
+    /* ── Progress ── */
     .progress-bar {
       height: 2px;
       background: rgba(0,0,0,0.06);
       border-radius: 2px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       flex-shrink: 0;
     }
     .progress-fill {
@@ -103,18 +94,16 @@
       transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
     }
 
-    /* Card area — fills remaining space */
+    /* ── Card area — takes all remaining space ── */
     .card-area {
       flex: 1;
       position: relative;
       min-height: 0;
-      overflow: visible;
     }
     .card-stack {
       position: absolute;
       top: 0; bottom: 0;
-      left: 12px; right: 12px;
-      overflow: visible;
+      left: 10px; right: 10px;
     }
     .card {
       position: absolute;
@@ -138,13 +127,13 @@
 
     .deck-card { position: absolute; background: var(--surface); border: 0.5px solid var(--border); border-radius: 20px; pointer-events: none; }
     .deck-card-2 { top: 10px; left: 8px; right: 8px; bottom: 0; opacity: 0.55; z-index: 1; }
-    .deck-card-3 { top: 0px; left: 16px; right: 16px; bottom: 0; opacity: 0.3; z-index: 0; }
+    .deck-card-3 { top: 0;   left: 16px; right: 16px; bottom: 0; opacity: 0.3;  z-index: 0; }
 
-    /* Video */
+    /* ── Video ── */
     .video-frame {
       flex: 1;
       min-height: 0;
-      background: #f0f0f0;
+      background: #ebebeb;
       position: relative;
     }
     .video-loading {
@@ -166,9 +155,9 @@
       border-radius: 999px; margin-top: 6px;
     }
 
-    /* Meta — compact, no truncation */
+    /* ── Meta ── */
     .meta {
-      padding: 11px 14px 13px;
+      padding: 12px 14px 16px;
       flex-shrink: 0;
       border-top: 0.5px solid var(--border);
       background: var(--surface);
@@ -177,59 +166,63 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+    .meta-top-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
     .badge {
       font-size: 10px; font-weight: 600;
       letter-spacing: 0.3px; text-transform: uppercase;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(29,158,117,0.12); color: #1D9E75;
+      white-space: nowrap; flex-shrink: 0;
     }
-    .meta-right {
-      display: flex; align-items: center; gap: 10px;
+    .posted-date {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
     }
-    .posted-date { font-size: 11px; color: var(--muted); }
     .comments-link {
-      font-size: 11px; color: #5DCAA5;
+      font-size: 12px; color: #5DCAA5;
       text-decoration: none; font-weight: 500;
+      white-space: nowrap; flex-shrink: 0;
     }
-    .comments-link:active { opacity: 0.6; }
     .card-title {
       font-size: 13px;
       font-weight: 500;
-      line-height: 1.45;
+      line-height: 1.5;
       color: var(--text);
       word-break: break-word;
+      /* No truncation — show full caption */
     }
-    .views { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .views {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
 
-    /* Stamps */
+    /* ── Stamps ── */
     .stamp {
       position: absolute; top: 28px;
-      font-size: 30px; font-weight: 900;
-      padding: 8px 18px; border-radius: 8px;
+      font-size: 28px; font-weight: 900;
+      padding: 8px 16px; border-radius: 8px;
       opacity: 0; pointer-events: none;
       z-index: 10; letter-spacing: 3px; text-transform: uppercase;
     }
-    .stamp.approve { left: 20px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
-    .stamp.reject  { right: 20px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg);  background: rgba(255,255,255,0.9); }
+    .stamp.approve { left: 18px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
+    .stamp.reject  { right: 18px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg);  background: rgba(255,255,255,0.9); }
     .card-bg-overlay { position: absolute; inset: 0; border-radius: 20px; pointer-events: none; z-index: 1; opacity: 0; }
 
-    /* Swipe hint */
-    .swipe-hint {
-      text-align: center;
-      font-size: 11px;
-      color: var(--muted);
-      padding: 8px 0 4px;
-      flex-shrink: 0;
-      letter-spacing: 0.1px;
-    }
-
-    /* Done screen */
-    .done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1rem; overflow-y: auto; }
+    /* ── Done ── */
+    .done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1rem; overflow-y: auto; gap: 0; }
     .done .check { font-size: 48px; margin-bottom: 12px; }
     .done h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.4px; }
-    .done p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+    .done > p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
     .pills { display: flex; gap: 10px; margin-bottom: 20px; }
     .pill { padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; }
     .pill.a { background: var(--approve-bg); color: var(--approve); border: 0.5px solid var(--approve); }
@@ -265,29 +258,25 @@ function loadCache() {
   } catch(e) {}
   return null;
 }
-function formatDate(iso) {
+function formatPulledDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) +
     ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 function formatPosted(iso) {
-  if (!iso) return '';
+  if (!iso) return null;
   const d = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+  if (isNaN(d)) return null;
+  const diffDays = Math.floor((Date.now() - d) / (1000 * 60 * 60 * 24));
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7)  return diffDays + 'd ago';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-// ── Card UI ────────────────────────────────────────────────────
-function showCardUI(pulledAt) {
-  current = 0;
-  approved.length = 0;
-  rejected.length = 0;
-
-  document.getElementById('app').innerHTML = `
+// ── Header HTML ────────────────────────────────────────────────
+function headerHTML(pulledAt) {
+  return `
     <div class="header">
       <div class="header-left">
         <h1>Format review</h1>
@@ -297,9 +286,20 @@ function showCardUI(pulledAt) {
         <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
           <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
         </button>
-        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatDate(pulledAt) : 'Never pulled'}</span>
+        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
       </div>
     </div>
+  `;
+}
+
+// ── Card UI ────────────────────────────────────────────────────
+function showCardUI(pulledAt) {
+  current = 0;
+  approved.length = 0;
+  rejected.length = 0;
+
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulledAt)}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -316,7 +316,6 @@ function showCardUI(pulledAt) {
         </div>
       </div>
     </div>
-    <div class="swipe-hint">← Skip &nbsp;&nbsp; Approve →</div>
   `;
   attachTouchEvents();
   loadCard(0);
@@ -326,19 +325,24 @@ async function loadCard(idx) {
   const vf   = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
   const prog = document.getElementById('progress');
-  const f = formats[idx];
+  const tc   = document.getElementById('total-count');
+  const f    = formats[idx];
 
   if (prog) prog.style.width = `${((idx+1)/formats.length)*100}%`;
+  if (tc)   tc.textContent   = `${idx+1} / ${formats.length} videos`;
 
   vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>';
 
+  const postedStr  = formatPosted(f.created);
+  const postedHTML = postedStr ? `<span class="posted-date">${postedStr}</span>` : '';
+
   meta.innerHTML = `
     <div class="meta-top">
-      <span class="badge">@${f.author || 'tiktok'}</span>
-      <div class="meta-right">
-        ${f.created ? `<span class="posted-date">${formatPosted(f.created)}</span>` : ''}
-        <a class="comments-link" href="${f.url}#comments" target="_blank">💬 Comments</a>
+      <div class="meta-top-left">
+        <span class="badge">@${f.author || 'tiktok'}</span>
+        ${postedHTML}
       </div>
+      <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
     <div class="views">♥ ${f.views} likes</div>
@@ -395,15 +399,7 @@ function swipe(dir) {
 function showDone() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    <div class="header">
-      <div class="header-left"><h1>Format review</h1></div>
-      <div class="header-right">
-        <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
-          <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
-        </button>
-        <span class="last-pulled" id="last-pulled">${pulled ? 'Last pulled: ' + formatDate(pulled) : ''}</span>
-      </div>
-    </div>
+    ${headerHTML(pulled)}
     <div class="done">
       <div class="check">✓</div>
       <h2>Review complete</h2>
@@ -436,7 +432,7 @@ function startReview() {
 // ── Empty state ────────────────────────────────────────────────
 function showEmptyState() {
   document.getElementById('app').innerHTML = `
-    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,16px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
+    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,20px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
       <div style="font-size:48px;">🎬</div>
       <div>
         <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-0.4px;">Format Review</h1>
