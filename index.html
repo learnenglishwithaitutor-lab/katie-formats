@@ -93,29 +93,6 @@
       overflow: visible;
     }
 
-    /* Deck cards rotated slightly to peek at sides */
-    .deck-card {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: var(--surface);
-      border: 0.5px solid rgba(255,255,255,0.1);
-      border-radius: 20px;
-      pointer-events: none;
-      transform-origin: bottom center;
-    }
-
-    .deck-card-2 {
-      transform: rotate(3deg) scale(0.97);
-      opacity: 0.6;
-      z-index: 1;
-    }
-
-    .deck-card-3 {
-      transform: rotate(-3deg) scale(0.94);
-      opacity: 0.35;
-      z-index: 0;
-    }
-
     .card {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -128,6 +105,9 @@
       touch-action: none;
       will-change: transform;
       z-index: 2;
+      box-shadow:
+        8px 8px 0 -2px #1e1e1e, 8px 8px 0 -1px rgba(255,255,255,0.06),
+        14px 14px 0 -4px #1a1a1a, 14px 14px 0 -3px rgba(255,255,255,0.04);
     }
 
     .card.animating {
@@ -372,8 +352,6 @@
 
   <div class="card-area" id="card-area">
     <div class="card-stack">
-    <div class="deck-card deck-card-3" id="deck-3"></div>
-    <div class="deck-card deck-card-2" id="deck-2"></div>
     <div class="card" id="card">
       <div class="stamp approve" id="stamp-a">APPROVE</div>
       <div class="stamp reject"  id="stamp-r">SKIP</div>
@@ -442,14 +420,6 @@ let current = 0;
 const approved = [], rejected = [];
 let startX = 0, startY = 0, isDragging = false, dragX = 0;
 
-function updateDeck() {
-  const remaining = formats.length - current;
-  const d2 = document.getElementById('deck-2');
-  const d3 = document.getElementById('deck-3');
-  if (d2) d2.style.display = remaining > 1 ? '' : 'none';
-  if (d3) d3.style.display = remaining > 2 ? '' : 'none';
-}
-
 async function loadCard(idx) {
   const vf = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
@@ -506,7 +476,6 @@ function swipe(dir) {
     if (ov2) ov2.style.opacity = 0;
     if (current >= formats.length) showDone();
     else loadCard(current);
-    updateDeck();
   }, 400);
 }
 
