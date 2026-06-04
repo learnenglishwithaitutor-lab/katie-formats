@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- v8 -->
+  <!-- v9 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,7 +24,6 @@
       --approve-bg: rgba(29,158,117,0.1);
       --reject: #E24B4A;
       --reject-bg: rgba(226,75,74,0.1);
-      --accent: #000;
     }
 
     html, body {
@@ -46,6 +45,7 @@
       margin: 0 auto;
     }
 
+    /* Header */
     .header {
       display: flex;
       justify-content: space-between;
@@ -53,27 +53,53 @@
       padding: 12px 0 10px;
       flex-shrink: 0;
     }
-
     .header h1 {
       font-size: 15px;
       font-weight: 600;
       letter-spacing: -0.2px;
     }
-
-    .counter {
-      font-size: 12px;
-      color: var(--muted);
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+    .refresh-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text);
+      font-size: 13px;
       font-weight: 500;
+      font-family: inherit;
+      letter-spacing: -0.1px;
+    }
+    .refresh-btn:active { opacity: 0.5; }
+    .refresh-icon {
+      font-size: 17px;
+      display: inline-block;
+      line-height: 1;
+    }
+    @keyframes spin-icon { to { transform: rotate(360deg); } }
+    .refresh-icon.spinning { animation: spin-icon 0.8s linear infinite; }
+    .last-pulled {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: right;
     }
 
+    /* Progress */
     .progress-bar {
       height: 2px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.06);
       border-radius: 2px;
       margin-bottom: 14px;
       flex-shrink: 0;
     }
-
     .progress-fill {
       height: 100%;
       background: var(--approve);
@@ -81,20 +107,19 @@
       transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
     }
 
+    /* Card area */
     .card-area {
       flex: 1;
       position: relative;
       min-height: 0;
       overflow: visible;
     }
-
     .card-stack {
       position: absolute;
       top: 0; bottom: 0;
       left: 12px; right: 12px;
       overflow: visible;
     }
-
     .card {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -107,15 +132,11 @@
       touch-action: none;
       will-change: transform;
       z-index: 2;
-      box-shadow:
-        8px 8px 0 0 #ddd8ce,
-        14px 14px 0 0 #d0cbc0;
+      box-shadow: 8px 8px 0 0 #ddd8ce, 14px 14px 0 0 #d0cbc0;
     }
-
     .card.animating {
       transition: transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.38s ease;
     }
-
     .card.fly-right { transform: translateX(110%) rotate(12deg) !important; opacity: 0; }
     .card.fly-left  { transform: translateX(-110%) rotate(-12deg) !important; opacity: 0; }
 
@@ -126,35 +147,16 @@
       border-radius: 20px;
       pointer-events: none;
     }
+    .deck-card-2 { top: 10px; left: 8px; right: 8px; bottom: 0; opacity: 0.55; z-index: 1; }
+    .deck-card-3 { top: 0px; left: 16px; right: 16px; bottom: 0; opacity: 0.3; z-index: 0; }
 
-    .deck-card-2 {
-      top: 10px; left: 8px; right: 8px; bottom: 0;
-      opacity: 0.55;
-      z-index: 1;
-    }
-
-    .deck-card-3 {
-      top: 0px; left: 16px; right: 16px; bottom: 0;
-      opacity: 0.3;
-      z-index: 0;
-    }
-
-    .card { z-index: 2; }
-
+    /* Video */
     .video-frame {
       flex: 1;
       min-height: 0;
-      background: #f5f5f5;
+      background: #f0f0f0;
       position: relative;
     }
-
-    .video-frame iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-      display: block;
-    }
-
     .video-loading {
       position: absolute;
       inset: 0;
@@ -163,22 +165,16 @@
       align-items: center;
       justify-content: center;
       gap: 10px;
-      background: #f0f0f0;
       color: var(--muted);
       font-size: 13px;
     }
-
     .video-loading .spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid rgba(255,255,255,0.1);
-      border-top-color: var(--approve); border-color: rgba(0,0,0,0.1);
+      width: 24px; height: 24px;
+      border: 2px solid rgba(0,0,0,0.08);
+      border-top-color: var(--approve);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin-icon 0.8s linear infinite;
     }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
     .watch-link {
       color: #5DCAA5;
       font-size: 12px;
@@ -189,13 +185,13 @@
       margin-top: 6px;
     }
 
+    /* Meta */
     .meta {
       padding: 12px 14px 14px;
       flex-shrink: 0;
       border-top: 0.5px solid var(--border);
       background: var(--surface);
     }
-
     .badge {
       display: inline-block;
       font-size: 10px;
@@ -205,8 +201,9 @@
       padding: 3px 9px;
       border-radius: 999px;
       margin-bottom: 7px;
+      background: rgba(29,158,117,0.12);
+      color: #1D9E75;
     }
-
     .card-title {
       font-size: 14px;
       font-weight: 600;
@@ -214,28 +211,9 @@
       margin-bottom: 5px;
       letter-spacing: -0.1px;
     }
+    .views { font-size: 11px; color: var(--muted); }
 
-    .views {
-      font-size: 11px;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .katie-angle {
-      background: rgba(255,255,255,0.04);
-      border: 0.5px solid var(--border);
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 11px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .katie-angle strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
+    /* Stamps */
     .stamp {
       position: absolute;
       top: 28px;
@@ -249,26 +227,23 @@
       letter-spacing: 3px;
       text-transform: uppercase;
     }
-
     .stamp.approve { left: 20px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
     .stamp.reject  { right: 20px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg); background: rgba(255,255,255,0.9); }
 
     .card-bg-overlay {
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
       border-radius: 20px;
       pointer-events: none;
-      z-index: 1;
-      opacity: 0;
+      z-index: 1; opacity: 0;
     }
 
+    /* Actions */
     .actions {
       display: flex;
       gap: 12px;
       padding: 10px 0 4px;
       flex-shrink: 0;
     }
-
     .btn {
       flex: 1;
       padding: 14px;
@@ -279,14 +254,23 @@
       border: 0.5px solid var(--border);
       background: var(--surface);
       color: var(--text);
-      transition: transform 0.1s, background 0.15s;
+      transition: transform 0.1s;
       letter-spacing: -0.2px;
+      font-family: inherit;
     }
-
     .btn:active { transform: scale(0.96); }
     .btn-approve { border-color: var(--approve); color: var(--approve); background: var(--approve-bg); }
     .btn-reject  { border-color: var(--reject);  color: var(--reject);  background: var(--reject-bg); }
 
+    /* Counter badge on approve button */
+    .counter-badge {
+      font-size: 10px;
+      opacity: 0.7;
+      font-weight: 400;
+      margin-left: 4px;
+    }
+
+    /* Done screen */
     .done {
       flex: 1;
       display: flex;
@@ -296,158 +280,175 @@
       text-align: center;
       padding: 2rem 1rem;
       gap: 0;
+      overflow-y: auto;
     }
-
     .done .check { font-size: 48px; margin-bottom: 12px; }
     .done h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.4px; }
     .done p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
-
     .pills { display: flex; gap: 10px; margin-bottom: 20px; }
     .pill { padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; }
     .pill.a { background: var(--approve-bg); color: var(--approve); border: 0.5px solid var(--approve); }
     .pill.r { background: var(--reject-bg);  color: var(--reject);  border: 0.5px solid var(--reject); }
-
-    .approved-list {
-      width: 100%;
-      border: 0.5px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      margin-bottom: 16px;
-      text-align: left;
-    }
-
-    .approved-item {
-      padding: 11px 14px;
-      border-bottom: 0.5px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
+    .approved-list { width: 100%; border: 0.5px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; text-align: left; }
+    .approved-item { padding: 11px 14px; border-bottom: 0.5px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .approved-item:last-child { border-bottom: none; }
     .approved-item .t { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
     .approved-item .v { font-size: 11px; color: var(--muted); white-space: nowrap; }
-
-    .btn-generate {
-      width: 100%;
-      padding: 15px;
-      border-radius: 14px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      border: none;
-      background: var(--approve);
-      color: #fff;
-      letter-spacing: -0.2px;
-    }
-
-    .btn-generate:active { transform: scale(0.97); }
+    .btn-generate { width: 100%; padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--approve); color: #fff; letter-spacing: -0.2px; font-family: inherit; }
+    .btn-again { width: 100%; padding: 13px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); margin-top: 10px; font-family: inherit; }
   </style>
 </head>
 <body>
-<div class="app" id="app">
-  <div class="header">
-    <h1>Format review</h1>
-    <span class="counter" id="counter">1 / 6</span>
-  </div>
-  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:16.6%"></div></div>
-
-  <div class="card-area" id="card-area">
-    <div class="card-stack">
-    <div class="card" id="card">
-      <div class="stamp approve" id="stamp-a">APPROVE</div>
-      <div class="stamp reject"  id="stamp-r">SKIP</div>
-      <div class="card-bg-overlay" id="bg-overlay"></div>
-      <div class="video-frame" id="video-frame">
-        <div class="video-loading"><div class="spinner"></div><span>Loading video...</span></div>
-      </div>
-      <div class="meta" id="meta"></div>
-    </div>
-    </div>
-  </div>
-
-  <div class="actions">
-    <button class="btn btn-reject"  onclick="swipe('left')">✕ Skip</button>
-    <button class="btn btn-approve" onclick="swipe('right')">✓ Approve</button>
-  </div>
-</div>
+<div class="app" id="app"></div>
 
 <script>
 let formats = [];
-
 let current = 0;
 const approved = [], rejected = [];
 let startX = 0, startY = 0, isDragging = false, dragX = 0;
 
+// ── Cache helpers ──────────────────────────────────────────────
+function saveCache(videos) {
+  localStorage.setItem('kf_videos', JSON.stringify(videos));
+  localStorage.setItem('kf_pulled', new Date().toISOString());
+}
+function loadCache() {
+  try {
+    const v = localStorage.getItem('kf_videos');
+    const t = localStorage.getItem('kf_pulled');
+    if (v && t) return { videos: JSON.parse(v), pulled: t };
+  } catch(e) {}
+  return null;
+}
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) +
+    ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Card UI ────────────────────────────────────────────────────
+function showCardUI(pulledAt) {
+  current = 0;
+  approved.length = 0;
+  rejected.length = 0;
+
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <h1>Format review</h1>
+      <div class="header-right">
+        <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
+          <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
+        </button>
+        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatDate(pulledAt) : 'Never pulled'}</span>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
+    <div class="card-area">
+      <div class="card-stack">
+        <div class="deck-card deck-card-3"></div>
+        <div class="deck-card deck-card-2"></div>
+        <div class="card" id="card">
+          <div class="stamp approve" id="stamp-a">APPROVE</div>
+          <div class="stamp reject"  id="stamp-r">SKIP</div>
+          <div class="card-bg-overlay" id="bg-overlay"></div>
+          <div class="video-frame" id="video-frame">
+            <div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+          <div class="meta" id="meta"></div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-reject"  onclick="swipe('left')">✕ Skip</button>
+      <button class="btn btn-approve" onclick="swipe('right')">✓ Approve <span class="counter-badge" id="counter">1/${formats.length}</span></button>
+    </div>
+  `;
+  attachTouchEvents();
+  loadCard(0);
+}
+
 async function loadCard(idx) {
-  const vf = document.getElementById('video-frame');
+  const vf   = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
+  const ctr  = document.getElementById('counter');
+  const prog = document.getElementById('progress');
   const f = formats[idx];
 
-  vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading video...</span></div>';
+  if (ctr)  ctr.textContent  = `${idx+1}/${formats.length}`;
+  if (prog) prog.style.width = `${((idx+1)/formats.length)*100}%`;
 
+  vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>';
   meta.innerHTML = `
-    <span class="badge" style="background:${f.badge};color:${f.badgeText}">${f.type}</span>
+    <span class="badge">@${f.author || 'tiktok'}</span>
     <p class="card-title">${f.title}</p>
-    <p class="views">♥ ${f.views} likes on TikTok</p>
-    <div class="katie-angle"><strong>Katie AI angle:</strong> ${f.katie}</div>
+    <p class="views">♥ ${f.views} likes</p>
   `;
 
-  document.getElementById('counter').textContent = `${idx + 1} / ${formats.length}`;
-  document.getElementById('progress').style.width = `${((idx + 1) / formats.length) * 100}%`;
+  if (f.thumbnail) {
+    showThumb(vf, f.thumbnail, f.url);
+  } else {
+    try {
+      const res  = await fetch(`/api/oembed?url=${encodeURIComponent(f.url)}`);
+      const data = await res.json();
+      if (data.thumbnail_url) showThumb(vf, data.thumbnail_url, f.url);
+      else showFallback(vf, f.url);
+    } catch { showFallback(vf, f.url); }
+  }
+}
 
-  try {
-    const res = await fetch(`/api/oembed?url=${encodeURIComponent(f.url)}`);
-    const data = await res.json();
-    if (data.thumbnail_url) {
-      vf.innerHTML = `
-        <a href="${f.url}" target="_blank" style="display:block;width:100%;height:100%;position:relative;text-decoration:none;">
-          <img src="${data.thumbnail_url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
-          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,0.35);">
-            <div style="width:56px;height:56px;background:rgba(255,255,255,0.95);border-radius:50%;display:flex;align-items:center;justify-content:center;">
-              <div style="width:0;height:0;border-style:solid;border-width:10px 0 10px 20px;border-color:transparent transparent transparent #000;margin-left:4px;"></div>
-            </div>
-            <span style="color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.5);padding:5px 14px;border-radius:999px;letter-spacing:0.2px;">Watch on TikTok</span>
-          </div>
-        </a>`;
-    } else { showFallback(vf, f.url); }
-  } catch { showFallback(vf, f.url); }
+function showThumb(vf, thumb, url) {
+  vf.innerHTML = `
+    <a href="${url}" target="_blank" style="display:block;width:100%;height:100%;position:relative;text-decoration:none;">
+      <img src="${thumb}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,0.35);">
+        <div style="width:56px;height:56px;background:rgba(255,255,255,0.95);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+          <div style="width:0;height:0;border-style:solid;border-width:10px 0 10px 20px;border-color:transparent transparent transparent #000;margin-left:4px;"></div>
+        </div>
+        <span style="color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.5);padding:5px 14px;border-radius:999px;">Watch on TikTok</span>
+      </div>
+    </a>`;
 }
 
 function showFallback(vf, url) {
   vf.innerHTML = `<div class="video-loading"><span>Preview unavailable</span><a class="watch-link" href="${url}" target="_blank">Watch on TikTok →</a></div>`;
 }
 
+// ── Swipe ──────────────────────────────────────────────────────
 function swipe(dir) {
   if (current >= formats.length) return;
   const card = document.getElementById('card');
-  card.classList.add('animating');
-  card.classList.add(dir === 'right' ? 'fly-right' : 'fly-left');
+  card.classList.add('animating', dir === 'right' ? 'fly-right' : 'fly-left');
   if (dir === 'right') approved.push(formats[current]);
   else rejected.push(formats[current]);
   current++;
   setTimeout(() => {
-    card.classList.remove('animating', 'fly-right', 'fly-left');
+    card.classList.remove('animating','fly-right','fly-left');
     card.style.transform = '';
-    document.getElementById('stamp-a').style.opacity = 0;
-    document.getElementById('stamp-r').style.opacity = 0;
-    const ov2 = document.getElementById('bg-overlay');
-    if (ov2) ov2.style.opacity = 0;
+    ['stamp-a','stamp-r','bg-overlay'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.opacity = 0;
+    });
     if (current >= formats.length) showDone();
     else loadCard(current);
   }, 400);
 }
 
 function showDone() {
+  const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    <div style="padding:12px 0 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-      <h1 style="font-size:15px;font-weight:600">Format review</h1>
+    <div class="header">
+      <h1>Format review</h1>
+      <div class="header-right">
+        <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
+          <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
+        </button>
+        <span class="last-pulled" id="last-pulled">${pulled ? 'Last pulled: ' + formatDate(pulled) : ''}</span>
+      </div>
     </div>
     <div class="done">
       <div class="check">✓</div>
       <h2>Review complete</h2>
-      <p>${approved.length} format${approved.length !== 1 ? 's' : ''} approved for script generation</p>
+      <p>${approved.length} format${approved.length !== 1 ? 's' : ''} approved</p>
       <div class="pills">
         <span class="pill a">${approved.length} approved</span>
         <span class="pill r">${rejected.length} skipped</span>
@@ -456,179 +457,100 @@ function showDone() {
         <div class="approved-list">
           ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">${f.views}</span></div>`).join('')}
         </div>
-        <button class="btn-generate" onclick="alert('Script generation coming soon — connect Claude API to activate this step.')">Generate scripts →</button>
+        <button class="btn-generate" onclick="alert('Script generation coming soon.')">Generate scripts →</button>
       ` : '<p style="color:var(--muted);font-size:14px">No formats approved this round.</p>'}
+      <button class="btn-again" onclick="startReview()">Review again</button>
     </div>
   `;
 }
 
-const card = document.getElementById('card');
-
-card.addEventListener('touchstart', e => {
-  startX = e.touches[0].clientX;
-  startY = e.touches[0].clientY;
-  isDragging = true;
-  dragX = 0;
-}, { passive: true });
-
-card.addEventListener('touchmove', e => {
-  if (!isDragging) return;
-  dragX = e.touches[0].clientX - startX;
-  const dragY = e.touches[0].clientY - startY;
-  if (Math.abs(dragX) < Math.abs(dragY) && Math.abs(dragX) < 10) return;
-  card.style.transform = `translateX(${dragX}px) rotate(${dragX * 0.06}deg)`;
-  const sa = document.getElementById('stamp-a');
-  const sr = document.getElementById('stamp-r');
-  const progress = Math.abs(dragX) > 30 ? Math.min((Math.abs(dragX) - 30) / 70, 1) : 0;
-  sa.style.opacity = dragX > 30 ? progress : 0;
-  sr.style.opacity = dragX < -30 ? progress : 0;
-  const overlay = document.getElementById('bg-overlay');
-  if (overlay) {
-    overlay.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent';
-    overlay.style.opacity = progress;
+function startReview() {
+  const cache = loadCache();
+  if (cache && cache.videos.length > 0) {
+    formats = cache.videos;
+    showCardUI(cache.pulled);
+  } else {
+    showEmptyState();
   }
-}, { passive: true });
-
-card.addEventListener('touchend', () => {
-  if (!isDragging) return;
-  isDragging = false;
-  if (dragX > 80) swipe('right');
-  else if (dragX < -80) swipe('left');
-  else {
-    card.style.transform = '';
-    document.getElementById('stamp-a').style.opacity = 0;
-    document.getElementById('stamp-r').style.opacity = 0;
-    const ov = document.getElementById('bg-overlay');
-    if (ov) { ov.style.opacity = 0; }
-  }
-});
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
 }
 
-function showStartScreen() {
+// ── Empty state (first ever load) ─────────────────────────────
+function showEmptyState() {
   document.getElementById('app').innerHTML = `
-    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,16px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;">
+    <div style="display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,16px) 16px env(safe-area-inset-bottom,16px);max-width:480px;margin:0 auto;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
       <div style="font-size:48px;">🎬</div>
       <div>
-        <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;color:#1a1a1a;letter-spacing:-0.4px;">Format Review</h1>
-        <p style="font-size:14px;color:#888;margin:0;">Pull the latest videos from your tracked accounts and swipe to approve formats.</p>
+        <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-0.4px;">Format Review</h1>
+        <p style="font-size:14px;color:#888;margin:0;">No videos yet. Pull the latest from your tracked accounts.</p>
       </div>
-      <button onclick="fetchFromApify()" id="fetch-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;letter-spacing:-0.2px;">
+      <button onclick="triggerRefresh()" id="refresh-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;font-family:inherit;">
         Get fresh videos
       </button>
-      <p style="font-size:12px;color:#aaa;margin:0;">Fetches last 5 days from @starvicks51, @fluently.kate, @lola_englishspeak, @keisha.learns</p>
+      <p style="font-size:12px;color:#aaa;margin:0;">@starvicks51 · @fluently.kate · @lola_englishspeak · @keisha.learns</p>
     </div>
   `;
 }
 
-async function fetchFromApify() {
-  const btn = document.getElementById('fetch-btn');
-  if (btn) { btn.textContent = 'Starting scrape...'; btn.disabled = true; }
+// ── Refresh / Apify scrape ─────────────────────────────────────
+async function triggerRefresh() {
+  const icon      = document.getElementById('refresh-icon');
+  const btn       = document.getElementById('refresh-btn');
+  const lastLabel = document.getElementById('last-pulled');
+
+  if (icon) icon.classList.add('spinning');
+  if (btn)  btn.disabled = true;
+  if (lastLabel) lastLabel.textContent = 'Starting scrape...';
 
   try {
-    // Start the run
-    const startRes = await fetch('/api/apify?action=start');
+    const startRes  = await fetch('/api/apify?action=start');
     const startData = await startRes.json();
-    const runId = startData.runId;
-    if (!runId) throw new Error('Failed to start run');
+    const runId     = startData.runId;
+    if (!runId) throw new Error('Failed to start Apify run');
 
-    // Poll for completion
-    let datasetId = null;
-    let attempts = 0;
+    let datasetId = null, attempts = 0;
     while (attempts < 60) {
       await new Promise(r => setTimeout(r, 5000));
       attempts++;
-      const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
+      if (lastLabel) lastLabel.textContent = `Scraping... (${attempts * 5}s)`;
+      const statusRes  = await fetch(`/api/apify?action=status&runId=${runId}`);
       const statusData = await statusRes.json();
-      if (btn) btn.textContent = `Scraping... (${attempts * 5}s)`;
-      if (statusData.status === 'SUCCEEDED') {
-        datasetId = statusData.datasetId;
-        break;
-      }
-      if (statusData.status === 'FAILED' || statusData.status === 'ABORTED') {
-        throw new Error('Apify run failed');
-      }
+      if (statusData.status === 'SUCCEEDED') { datasetId = statusData.datasetId; break; }
+      if (statusData.status === 'FAILED' || statusData.status === 'ABORTED') throw new Error('Apify run failed');
     }
-
     if (!datasetId) throw new Error('Timed out waiting for results');
 
-    // Fetch results
-    if (btn) btn.textContent = 'Loading videos...';
-    const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
+    if (lastLabel) lastLabel.textContent = 'Loading videos...';
+    const resultsRes  = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
+    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in last 5 days');
 
-    if (!resultsData.videos || resultsData.videos.length === 0) {
-      throw new Error('No videos found in last 5 days');
-    }
-
-    // Map to formats structure
     formats = resultsData.videos.map(v => ({
-      title: v.title.slice(0, 80),
-      views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : v.views.toString(),
-      url: v.url,
+      title:     (v.title || 'No caption').slice(0, 80),
+      views:     v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
+      url:       v.url,
       thumbnail: v.thumbnail,
-      author: v.author,
-      badge: 'rgba(29,158,117,0.12)',
-      badgeText: '#1D9E75',
-      katie: ''
+      author:    v.author
     }));
 
-    // Rebuild the app UI
-    document.getElementById('app').innerHTML = `
-      <div class="header">
-        <h1>Format review</h1>
-        <span class="counter" id="counter">1 / ${formats.length}</span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
-      <div class="card-area" id="card-area">
-        <div class="card-stack">
-          <div class="deck-card deck-card-3" id="deck-3"></div>
-          <div class="deck-card deck-card-2" id="deck-2"></div>
-          <div class="card" id="card">
-            <div class="stamp approve" id="stamp-a">APPROVE</div>
-            <div class="stamp reject" id="stamp-r">SKIP</div>
-            <div class="card-bg-overlay" id="bg-overlay"></div>
-            <div class="video-frame" id="video-frame">
-              <div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>
-            </div>
-            <div class="meta" id="meta"></div>
-          </div>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="btn btn-reject" onclick="swipe('left')">✕ Skip</button>
-        <button class="btn btn-approve" onclick="swipe('right')">✓ Approve</button>
-      </div>
-    `;
-
-    // Re-attach touch events
-    attachTouchEvents();
-    current = 0;
-    approved.length = 0;
-    rejected.length = 0;
-    loadCard(0);
+    saveCache(formats);
+    showCardUI(localStorage.getItem('kf_pulled'));
 
   } catch (err) {
-    document.getElementById('app').innerHTML = `
-      <div style="display:flex;flex-direction:column;height:100dvh;align-items:center;justify-content:center;padding:2rem;text-align:center;font-family:-apple-system,sans-serif;gap:1rem;">
-        <p style="font-size:16px;color:#E24B4A;font-weight:600;">Something went wrong</p>
-        <p style="font-size:13px;color:#888;">${err.message}</p>
-        <button onclick="showStartScreen()" style="padding:12px 24px;border-radius:12px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Try again</button>
-      </div>
-    `;
+    if (icon)      icon.classList.remove('spinning');
+    if (btn)       btn.disabled = false;
+    if (lastLabel) lastLabel.textContent = 'Refresh failed — try again';
+    console.error(err);
   }
 }
 
+// ── Touch events ───────────────────────────────────────────────
 function attachTouchEvents() {
   const card = document.getElementById('card');
   if (!card) return;
   card.addEventListener('touchstart', e => {
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
-    isDragging = true;
-    dragX = 0;
+    isDragging = true; dragX = 0;
   }, { passive: true });
   card.addEventListener('touchmove', e => {
     if (!isDragging) return;
@@ -639,12 +561,12 @@ function attachTouchEvents() {
     const progress = Math.abs(dragX) > 30 ? Math.min((Math.abs(dragX) - 30) / 70, 1) : 0;
     const sa = document.getElementById('stamp-a');
     const sr = document.getElementById('stamp-r');
+    const ov = document.getElementById('bg-overlay');
     if (sa) sa.style.opacity = dragX > 30 ? progress : 0;
     if (sr) sr.style.opacity = dragX < -30 ? progress : 0;
-    const overlay = document.getElementById('bg-overlay');
-    if (overlay) {
-      overlay.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent';
-      overlay.style.opacity = progress;
+    if (ov) {
+      ov.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent';
+      ov.style.opacity = progress;
     }
   }, { passive: true });
   card.addEventListener('touchend', () => {
@@ -654,17 +576,24 @@ function attachTouchEvents() {
     else if (dragX < -80) swipe('left');
     else {
       card.style.transform = '';
-      const sa = document.getElementById('stamp-a');
-      const sr = document.getElementById('stamp-r');
-      const ov = document.getElementById('bg-overlay');
-      if (sa) sa.style.opacity = 0;
-      if (sr) sr.style.opacity = 0;
-      if (ov) ov.style.opacity = 0;
+      ['stamp-a','stamp-r','bg-overlay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.opacity = 0;
+      });
     }
   });
 }
 
-showStartScreen();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+// ── Boot ───────────────────────────────────────────────────────
+const cache = loadCache();
+if (cache && cache.videos.length > 0) {
+  formats = cache.videos;
+  showCardUI(cache.pulled);
+} else {
+  showEmptyState();
+}
 </script>
 </body>
 </html>
