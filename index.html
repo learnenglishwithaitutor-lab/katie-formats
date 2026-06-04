@@ -10,14 +10,14 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- v13 -->
+  <!-- v14 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg: #F0EEE9; --surface: #FFFFFF;
       --border: rgba(0,0,0,0.08); --text: #1a1a1a; --muted: #888;
       --approve: #1D9E75; --approve-bg: rgba(29,158,117,0.1);
-      --reject: #E24B4A;  --reject-bg:  rgba(226,75,74,0.1);
+      --reject: #E24B4A; --reject-bg: rgba(226,75,74,0.1);
     }
     html, body {
       height: 100%; background: var(--bg); color: var(--text);
@@ -63,10 +63,10 @@
     .card.fly-right { transform: translateX(110%) rotate(12deg) !important; opacity: 0; }
     .card.fly-left  { transform: translateX(-110%) rotate(-12deg) !important; opacity: 0; }
     .deck-card { position: absolute; background: var(--surface); border: 0.5px solid var(--border); border-radius: 20px; pointer-events: none; }
-    .deck-card-2 { top: 10px; left: 8px;  right: 8px;  bottom: 0; opacity: 0.55; z-index: 1; }
-    .deck-card-3 { top: 0;   left: 16px; right: 16px; bottom: 0; opacity: 0.3;  z-index: 0; }
+    .deck-card-2 { top: 10px; left: 8px; right: 8px; bottom: 0; opacity: 0.55; z-index: 1; }
+    .deck-card-3 { top: 0; left: 16px; right: 16px; bottom: 0; opacity: 0.3; z-index: 0; }
 
-    /* Video */
+    /* Video frame */
     .video-frame { flex: 1; min-height: 0; background: #ebebeb; position: relative; }
     .video-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px; }
     .video-loading .spinner { width: 24px; height: 24px; border: 2px solid rgba(0,0,0,0.08); border-top-color: var(--approve); border-radius: 50%; animation: spin-icon 0.8s linear infinite; }
@@ -85,10 +85,19 @@
     /* Stamps */
     .stamp { position: absolute; top: 28px; font-size: 28px; font-weight: 900; padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; z-index: 10; letter-spacing: 3px; text-transform: uppercase; }
     .stamp.approve { left: 18px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
-    .stamp.reject  { right: 18px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg);  background: rgba(255,255,255,0.9); }
+    .stamp.reject  { right: 18px; color: #E24B4A; border: 4px solid #E24B4A; transform: rotate(15deg); background: rgba(255,255,255,0.9); }
     .card-bg-overlay { position: absolute; inset: 0; border-radius: 20px; pointer-events: none; z-index: 1; opacity: 0; }
 
-    /* Settings screen */
+    /* Script card */
+    .script-thumb { flex-shrink: 0; height: 160px; background: #ebebeb; position: relative; }
+    .script-source { padding: 8px 14px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .script-source-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+    .script-source-handle { font-size: 11px; color: #1D9E75; font-weight: 600; }
+    .script-body { flex: 1; overflow-y: auto; padding: 14px 14px 16px; }
+    .script-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .script-text { font-size: 13px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+
+    /* Settings */
     .settings-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; padding-top: 4px; }
     .settings-section-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .accounts-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; margin-bottom: 16px; }
@@ -106,32 +115,43 @@
     .add-btn:active { opacity: 0.8; }
     .back-btn { width: 100%; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600; font-family: inherit; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; }
 
-    /* Done */
+    /* Done / loading screens */
     .done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1rem; overflow-y: auto; }
     .done .check { font-size: 48px; margin-bottom: 12px; }
     .done h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.4px; }
     .done > p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
-    .pills { display: flex; gap: 10px; margin-bottom: 20px; }
+    .pills { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
     .pill { padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; }
     .pill.a { background: var(--approve-bg); color: var(--approve); border: 0.5px solid var(--approve); }
-    .pill.r { background: var(--reject-bg);  color: var(--reject);  border: 0.5px solid var(--reject); }
-    .approved-list { width: 100%; border: 0.5px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; text-align: left; }
+    .pill.r { background: var(--reject-bg); color: var(--reject); border: 0.5px solid var(--reject); }
+    .approved-list { width: 100%; border: 0.5px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; text-align: left; max-height: 200px; overflow-y: auto; }
     .approved-item { padding: 11px 14px; border-bottom: 0.5px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .approved-item:last-child { border-bottom: none; }
     .approved-item .t { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
     .approved-item .v { font-size: 11px; color: var(--muted); white-space: nowrap; }
-    .btn-generate { width: 100%; padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--approve); color: #fff; font-family: inherit; }
-    .btn-again { width: 100%; padding: 13px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); margin-top: 10px; font-family: inherit; }
+    .btn-primary { width: 100%; padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--approve); color: #fff; font-family: inherit; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { width: 100%; padding: 13px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); margin-top: 10px; font-family: inherit; }
+    .loading-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 2rem; }
+    .loading-spinner { width: 36px; height: 36px; border: 3px solid rgba(0,0,0,0.08); border-top-color: var(--approve); border-radius: 50%; animation: spin-icon 0.8s linear infinite; }
+    .loading-title { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+    .loading-sub { font-size: 13px; color: var(--muted); }
   </style>
 </head>
 <body>
 <div class="app" id="app"></div>
 
 <script>
+// ── State ──────────────────────────────────────────────────────
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
 let startX = 0, startY = 0, isDragging = false, dragX = 0;
+
+// Stage 2
+let scripts = [];       // [{format, script}, ...]
+let scriptCurrent = 0;
+const approvedScripts = [], rejectedScripts = [];
 
 const DEFAULT_ACCOUNTS = [
   'https://www.tiktok.com/@starvicks51',
@@ -142,27 +162,18 @@ const DEFAULT_ACCOUNTS = [
 
 // ── Accounts ──────────────────────────────────────────────────
 function loadAccounts() {
-  try {
-    const a = localStorage.getItem('kf_accounts');
-    if (a) return JSON.parse(a);
-  } catch(e) {}
+  try { const a = localStorage.getItem('kf_accounts'); if (a) return JSON.parse(a); } catch(e) {}
   return [...DEFAULT_ACCOUNTS];
 }
-function saveAccounts(accounts) {
-  localStorage.setItem('kf_accounts', JSON.stringify(accounts));
-}
+function saveAccounts(a) { localStorage.setItem('kf_accounts', JSON.stringify(a)); }
 function normaliseUrl(input) {
   input = input.trim();
-  // Accept @handle, handle, or full URL
   if (input.startsWith('https://www.tiktok.com/')) return input;
   if (input.startsWith('@')) return 'https://www.tiktok.com/' + input;
   if (input.includes('tiktok.com/')) return 'https://' + input.replace(/^https?:\/\//, '');
   return 'https://www.tiktok.com/@' + input.replace(/^@/, '');
 }
-function handleFromUrl(url) {
-  const m = url.match(/@([^/?]+)/);
-  return m ? '@' + m[1] : url;
-}
+function handleFromUrl(url) { const m = url.match(/@([^/?]+)/); return m ? '@' + m[1] : url; }
 
 // ── Cache ──────────────────────────────────────────────────────
 function saveCache(videos) {
@@ -170,39 +181,32 @@ function saveCache(videos) {
   localStorage.setItem('kf_pulled', new Date().toISOString());
 }
 function loadCache() {
-  try {
-    const v = localStorage.getItem('kf_videos');
-    const t = localStorage.getItem('kf_pulled');
-    if (v && t) return { videos: JSON.parse(v), pulled: t };
-  } catch(e) {}
+  try { const v = localStorage.getItem('kf_videos'); const t = localStorage.getItem('kf_pulled'); if (v && t) return { videos: JSON.parse(v), pulled: t }; } catch(e) {}
   return null;
 }
 function formatPulledDate(iso) {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) +
-    ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 function formatPosted(iso) {
   if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d)) return null;
-  const diffDays = Math.floor((Date.now() - d) / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7)  return diffDays + 'd ago';
+  const d = new Date(iso); if (isNaN(d)) return null;
+  const diff = Math.floor((Date.now() - d) / 86400000);
+  if (diff === 0) return 'Today'; if (diff === 1) return 'Yesterday';
+  if (diff < 7) return diff + 'd ago';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 // ── Header ─────────────────────────────────────────────────────
-function headerHTML(pulledAt, showCount) {
+function headerHTML(pulledAt, countText) {
   return `
     <div class="header">
       <div class="header-left">
         <h1>Format review</h1>
-        ${showCount ? `<div class="total-count" id="total-count">${formats.length} videos to review</div>` : ''}
+        ${countText ? `<div class="total-count" id="total-count">${countText}</div>` : ''}
       </div>
       <div class="header-right">
-        <button class="icon-btn" onclick="showSettings()" title="Manage accounts">⚙️</button>
+        <button class="icon-btn" onclick="showSettings()">⚙️</button>
         <div class="header-right-inner">
           <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
             <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
@@ -210,87 +214,14 @@ function headerHTML(pulledAt, showCount) {
           <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ── Settings screen ────────────────────────────────────────────
-function showSettings() {
-  const pulled = localStorage.getItem('kf_pulled');
-  document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, false)}
-    <div class="settings-screen">
-      <div class="settings-section-title">Tracked accounts</div>
-      <div class="accounts-list" id="accounts-list"></div>
-      <div class="add-row">
-        <input class="add-input" id="add-input" type="url" inputmode="url"
-          placeholder="@handle or tiktok.com/@handle" />
-        <button class="add-btn" onclick="addAccount()">Add</button>
-      </div>
-      <button class="back-btn" onclick="goBack()">← Done</button>
-    </div>
-  `;
-  renderAccountsList();
-  // Allow pressing Enter to add
-  document.getElementById('add-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addAccount();
-  });
-}
-
-function renderAccountsList() {
-  const accounts = loadAccounts();
-  const list = document.getElementById('accounts-list');
-  if (!list) return;
-  if (accounts.length === 0) {
-    list.innerHTML = `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0;">No accounts yet. Add one above.</p>`;
-    return;
-  }
-  list.innerHTML = accounts.map((url, i) => `
-    <div class="account-row">
-      <div class="account-info">
-        <div class="account-handle">${handleFromUrl(url)}</div>
-        <div class="account-url">${url}</div>
-      </div>
-      <button class="remove-btn" onclick="removeAccount(${i})" title="Remove">×</button>
-    </div>
-  `).join('');
-}
-
-function addAccount() {
-  const input = document.getElementById('add-input');
-  const raw = input.value.trim();
-  if (!raw) return;
-  const url = normaliseUrl(raw);
-  const accounts = loadAccounts();
-  if (accounts.includes(url)) { input.value = ''; return; }
-  accounts.push(url);
-  saveAccounts(accounts);
-  input.value = '';
-  renderAccountsList();
-}
-
-function removeAccount(idx) {
-  const accounts = loadAccounts();
-  accounts.splice(idx, 1);
-  saveAccounts(accounts);
-  renderAccountsList();
-}
-
-function goBack() {
-  const cache = loadCache();
-  if (cache && cache.videos.length > 0) {
-    formats = cache.videos;
-    showCardUI(cache.pulled);
-  } else {
-    showEmptyState();
-  }
-}
-
-// ── Card UI ────────────────────────────────────────────────────
+// ── Stage 1: Format card UI ────────────────────────────────────
 function showCardUI(pulledAt) {
   current = 0; approved.length = 0; rejected.length = 0;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulledAt, true)}
+    ${headerHTML(pulledAt, formats.length + ' videos to review')}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -298,16 +229,13 @@ function showCardUI(pulledAt) {
         <div class="deck-card deck-card-2"></div>
         <div class="card" id="card">
           <div class="stamp approve" id="stamp-a">APPROVE</div>
-          <div class="stamp reject"  id="stamp-r">SKIP</div>
+          <div class="stamp reject" id="stamp-r">SKIP</div>
           <div class="card-bg-overlay" id="bg-overlay"></div>
-          <div class="video-frame" id="video-frame">
-            <div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>
-          </div>
+          <div class="video-frame" id="video-frame"><div class="video-loading"><div class="spinner"></div><span>Loading...</span></div></div>
           <div class="meta" id="meta"></div>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
   attachTouchEvents();
   loadCard(0);
 }
@@ -316,28 +244,26 @@ async function loadCard(idx) {
   const vf = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
   const prog = document.getElementById('progress');
-  const tc   = document.getElementById('total-count');
+  const tc = document.getElementById('total-count');
   const f = formats[idx];
   if (prog) prog.style.width = `${((idx+1)/formats.length)*100}%`;
-  if (tc)   tc.textContent   = `${idx+1} / ${formats.length} videos`;
+  if (tc) tc.textContent = `${idx+1} / ${formats.length} videos`;
   vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>';
-  const postedStr  = formatPosted(f.created);
+  const posted = formatPosted(f.created);
   meta.innerHTML = `
     <div class="meta-top">
       <div class="meta-top-left">
         <span class="badge">@${f.author || 'tiktok'}</span>
-        ${postedStr ? `<span class="posted-date">${postedStr}</span>` : ''}
+        ${posted ? `<span class="posted-date">${posted}</span>` : ''}
       </div>
       <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
-    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments</div>
-  `;
-  if (f.thumbnail) {
-    showThumb(vf, f.thumbnail, f.url);
-  } else {
+    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments</div>`;
+  if (f.thumbnail) showThumb(vf, f.thumbnail, f.url);
+  else {
     try {
-      const res  = await fetch(`/api/oembed?url=${encodeURIComponent(f.url)}`);
+      const res = await fetch(`/api/oembed?url=${encodeURIComponent(f.url)}`);
       const data = await res.json();
       if (data.thumbnail_url) showThumb(vf, data.thumbnail_url, f.url);
       else showFallback(vf, f.url);
@@ -361,7 +287,7 @@ function showFallback(vf, url) {
   vf.innerHTML = `<div class="video-loading"><span>Preview unavailable</span><a class="watch-link" href="${url}" target="_blank">Watch on TikTok →</a></div>`;
 }
 
-// ── Swipe ──────────────────────────────────────────────────────
+// ── Stage 1: Swipe ─────────────────────────────────────────────
 function swipe(dir) {
   if (current >= formats.length) return;
   const card = document.getElementById('card');
@@ -372,21 +298,20 @@ function swipe(dir) {
   setTimeout(() => {
     card.classList.remove('animating','fly-right','fly-left');
     card.style.transform = '';
-    ['stamp-a','stamp-r','bg-overlay'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.opacity = 0;
-    });
-    if (current >= formats.length) showDone();
+    ['stamp-a','stamp-r','bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
+    if (current >= formats.length) showStage1Done();
     else loadCard(current);
   }, 400);
 }
 
-function showDone() {
+// ── Stage 1: Done ──────────────────────────────────────────────
+function showStage1Done() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, false)}
+    ${headerHTML(pulled, null)}
     <div class="done">
       <div class="check">✓</div>
-      <h2>Review complete</h2>
+      <h2>Formats reviewed</h2>
       <p>${approved.length} format${approved.length !== 1 ? 's' : ''} approved</p>
       <div class="pills">
         <span class="pill a">${approved.length} approved</span>
@@ -394,20 +319,289 @@ function showDone() {
       </div>
       ${approved.length > 0 ? `
         <div class="approved-list">
-          ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">${f.views}</span></div>`).join('')}
+          ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">♥ ${f.views}</span></div>`).join('')}
         </div>
-        <button class="btn-generate" onclick="alert('Script generation coming soon.')">Generate scripts →</button>
+        <button class="btn-primary" onclick="startScriptGeneration()">Generate scripts →</button>
       ` : '<p style="color:var(--muted);font-size:14px">No formats approved this round.</p>'}
-      <button class="btn-again" onclick="goBack()">Review again</button>
-    </div>
-  `;
+      <button class="btn-secondary" onclick="goBack()">Review again</button>
+    </div>`;
+}
+
+// ── Stage 2: Generate scripts ──────────────────────────────────
+async function startScriptGeneration() {
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null)}
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-title" id="loading-title">Transcribing videos...</div>
+      <div class="loading-sub" id="loading-sub">This may take a minute</div>
+    </div>`;
+
+  const setStatus = (title, sub) => {
+    const t = document.getElementById('loading-title');
+    const s = document.getElementById('loading-sub');
+    if (t) t.textContent = title;
+    if (s) s.textContent = sub;
+  };
+
+  try {
+    // Step 1: Transcribe all approved videos
+    setStatus('Transcribing videos...', `0 / ${approved.length} done`);
+    const transcriptRes = await fetch('/api/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: approved.map(f => f.url) })
+    });
+    const transcriptData = await transcriptRes.json();
+    const transcripts = transcriptData.transcripts || {};
+
+    // Step 2: Generate script for each approved video
+    scripts = [];
+    for (let i = 0; i < approved.length; i++) {
+      const f = approved[i];
+      setStatus(`Generating script ${i+1} of ${approved.length}...`, f.title.slice(0, 50) + '...');
+      const genRes = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: transcripts[f.url] || '',
+          caption: f.title,
+          author: f.author
+        })
+      });
+      const genData = await genRes.json();
+      scripts.push({ format: f, script: genData.script || '' });
+    }
+
+    // Step 3: Show script review
+    showScriptUI();
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(null, null)}
+      <div class="done">
+        <div class="check">⚠️</div>
+        <h2>Something went wrong</h2>
+        <p>${err.message}</p>
+        <button class="btn-primary" onclick="startScriptGeneration()">Try again</button>
+        <button class="btn-secondary" onclick="showStage1Done()">Back</button>
+      </div>`;
+  }
+}
+
+// ── Stage 2: Script swipe UI ───────────────────────────────────
+function showScriptUI() {
+  scriptCurrent = 0; approvedScripts.length = 0; rejectedScripts.length = 0;
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, 'Script review')}
+    <div class="progress-bar"><div class="progress-fill" id="s-progress" style="width:${100/scripts.length}%"></div></div>
+    <div class="card-area">
+      <div class="card-stack">
+        <div class="deck-card deck-card-3"></div>
+        <div class="deck-card deck-card-2"></div>
+        <div class="card" id="s-card">
+          <div class="stamp approve" id="s-stamp-a">APPROVE</div>
+          <div class="stamp reject" id="s-stamp-r">SKIP</div>
+          <div class="card-bg-overlay" id="s-bg-overlay"></div>
+          <div class="script-thumb" id="s-thumb"></div>
+          <div class="script-source">
+            <span class="script-source-label">Source</span>
+            <span class="script-source-handle" id="s-handle"></span>
+            <a id="s-link" href="#" target="_blank" style="margin-left:auto;font-size:11px;color:#5DCAA5;text-decoration:none;">View ↗</a>
+          </div>
+          <div class="script-body">
+            <div class="script-label" id="s-count">Script 1 / ${scripts.length}</div>
+            <div class="script-text" id="s-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  attachScriptTouchEvents();
+  loadScriptCard(0);
+}
+
+function loadScriptCard(idx) {
+  const s = scripts[idx];
+  const prog = document.getElementById('s-progress');
+  const count = document.getElementById('s-count');
+  const thumb = document.getElementById('s-thumb');
+  const handle = document.getElementById('s-handle');
+  const link = document.getElementById('s-link');
+  const text = document.getElementById('s-text');
+  if (prog) prog.style.width = `${((idx+1)/scripts.length)*100}%`;
+  if (count) count.textContent = `Script ${idx+1} / ${scripts.length}`;
+  if (handle) handle.textContent = '@' + (s.format.author || 'unknown');
+  if (link) link.href = s.format.url;
+  if (text) text.textContent = s.script;
+  if (thumb) {
+    if (s.format.thumbnail) {
+      thumb.innerHTML = `<a href="${s.format.url}" target="_blank" style="display:block;width:100%;height:100%;"><img src="${s.format.thumbnail}" style="width:100%;height:100%;object-fit:cover;" /></a>`;
+    } else {
+      thumb.innerHTML = `<div class="video-loading"><span style="font-size:12px;color:var(--muted)">No thumbnail</span></div>`;
+    }
+  }
+}
+
+function swipeScript(dir) {
+  if (scriptCurrent >= scripts.length) return;
+  const card = document.getElementById('s-card');
+  card.classList.add('animating', dir === 'right' ? 'fly-right' : 'fly-left');
+  if (dir === 'right') approvedScripts.push(scripts[scriptCurrent]);
+  else rejectedScripts.push(scripts[scriptCurrent]);
+  scriptCurrent++;
+  setTimeout(() => {
+    card.classList.remove('animating','fly-right','fly-left');
+    card.style.transform = '';
+    ['s-stamp-a','s-stamp-r','s-bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
+    if (scriptCurrent >= scripts.length) showStage2Done();
+    else loadScriptCard(scriptCurrent);
+  }, 400);
+}
+
+function attachScriptTouchEvents() {
+  const card = document.getElementById('s-card');
+  if (!card) return;
+  let sX = 0, sY = 0, dragging = false, dX = 0;
+  card.addEventListener('touchstart', e => { sX = e.touches[0].clientX; sY = e.touches[0].clientY; dragging = true; dX = 0; }, { passive: true });
+  card.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    dX = e.touches[0].clientX - sX;
+    const dY = e.touches[0].clientY - sY;
+    if (Math.abs(dX) < Math.abs(dY) && Math.abs(dX) < 10) return;
+    card.style.transform = `translateX(${dX}px) rotate(${dX * 0.06}deg)`;
+    const progress = Math.abs(dX) > 30 ? Math.min((Math.abs(dX) - 30) / 70, 1) : 0;
+    const sa = document.getElementById('s-stamp-a');
+    const sr = document.getElementById('s-stamp-r');
+    const ov = document.getElementById('s-bg-overlay');
+    if (sa) sa.style.opacity = dX > 30 ? progress : 0;
+    if (sr) sr.style.opacity = dX < -30 ? progress : 0;
+    if (ov) { ov.style.background = dX > 30 ? 'rgba(29,158,117,0.15)' : dX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent'; ov.style.opacity = progress; }
+  }, { passive: true });
+  card.addEventListener('touchend', () => {
+    if (!dragging) return; dragging = false;
+    if (dX > 80) swipeScript('right');
+    else if (dX < -80) swipeScript('left');
+    else {
+      card.style.transform = '';
+      ['s-stamp-a','s-stamp-r','s-bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
+    }
+  });
+}
+
+// ── Stage 2: Done ──────────────────────────────────────────────
+function showStage2Done() {
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null)}
+    <div class="done">
+      <div class="check">✓</div>
+      <h2>Scripts reviewed</h2>
+      <p>${approvedScripts.length} script${approvedScripts.length !== 1 ? 's' : ''} approved</p>
+      <div class="pills">
+        <span class="pill a">${approvedScripts.length} approved</span>
+        <span class="pill r">${rejectedScripts.length} skipped</span>
+      </div>
+      ${approvedScripts.length > 0 ? `
+        <div class="approved-list">
+          ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">♥ ${s.format.views}</span></div>`).join('')}
+        </div>
+        <button class="btn-primary" id="send-btn" onclick="sendToSheet()">Send to Google Sheet →</button>
+      ` : '<p style="color:var(--muted);font-size:14px">No scripts approved this round.</p>'}
+      <button class="btn-secondary" onclick="showScriptUI()">Review scripts again</button>
+      <button class="btn-secondary" onclick="goBack()">Back to formats</button>
+    </div>`;
+}
+
+// ── Send to Sheet ──────────────────────────────────────────────
+async function sendToSheet() {
+  const btn = document.getElementById('send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  try {
+    const rows = approvedScripts.map(s => ({
+      author: s.format.author,
+      url: s.format.url,
+      thumbnail: s.format.thumbnail,
+      originalCaption: s.format.title,
+      script: s.script
+    }));
+
+    const res = await fetch('/api/sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      if (btn) { btn.textContent = `✓ Sent ${rows.length} row${rows.length !== 1 ? 's' : ''} to Sheet`; }
+    } else {
+      throw new Error(data.error || 'Unknown error');
+    }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry sending →'; }
+    alert('Error sending to sheet: ' + err.message);
+  }
+}
+
+// ── Settings ───────────────────────────────────────────────────
+function showSettings() {
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null)}
+    <div class="settings-screen">
+      <div class="settings-section-title">Tracked accounts</div>
+      <div class="accounts-list" id="accounts-list"></div>
+      <div class="add-row">
+        <input class="add-input" id="add-input" type="url" inputmode="url" placeholder="@handle or tiktok.com/@handle" />
+        <button class="add-btn" onclick="addAccount()">Add</button>
+      </div>
+      <button class="back-btn" onclick="goBack()">← Done</button>
+    </div>`;
+  renderAccountsList();
+  document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addAccount(); });
+}
+
+function renderAccountsList() {
+  const accounts = loadAccounts();
+  const list = document.getElementById('accounts-list');
+  if (!list) return;
+  if (accounts.length === 0) { list.innerHTML = `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0;">No accounts yet.</p>`; return; }
+  list.innerHTML = accounts.map((url, i) => `
+    <div class="account-row">
+      <div class="account-info">
+        <div class="account-handle">${handleFromUrl(url)}</div>
+        <div class="account-url">${url}</div>
+      </div>
+      <button class="remove-btn" onclick="removeAccount(${i})">×</button>
+    </div>`).join('');
+}
+function addAccount() {
+  const input = document.getElementById('add-input');
+  const raw = input.value.trim(); if (!raw) return;
+  const url = normaliseUrl(raw);
+  const accounts = loadAccounts();
+  if (accounts.includes(url)) { input.value = ''; return; }
+  accounts.push(url); saveAccounts(accounts); input.value = ''; renderAccountsList();
+}
+function removeAccount(idx) {
+  const accounts = loadAccounts(); accounts.splice(idx, 1); saveAccounts(accounts); renderAccountsList();
+}
+
+function goBack() {
+  const cache = loadCache();
+  if (cache && cache.videos.length > 0) { formats = cache.videos; showCardUI(cache.pulled); }
+  else showEmptyState();
 }
 
 // ── Empty state ────────────────────────────────────────────────
 function showEmptyState() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, false)}
+    ${headerHTML(pulled, null)}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;text-align:center;">
       <div style="font-size:48px;">🎬</div>
       <div>
@@ -417,82 +611,59 @@ function showEmptyState() {
       <button onclick="triggerRefresh()" id="refresh-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;font-family:inherit;">
         Get fresh videos
       </button>
-    </div>
-  `;
+    </div>`;
 }
 
 // ── Refresh ────────────────────────────────────────────────────
 async function triggerRefresh() {
-  const icon      = document.getElementById('refresh-icon');
-  const btn       = document.getElementById('refresh-btn');
+  const icon = document.getElementById('refresh-icon');
+  const btn = document.getElementById('refresh-btn');
   const lastLabel = document.getElementById('last-pulled');
-  const accounts  = loadAccounts();
-
-  if (accounts.length === 0) {
-    alert('No accounts to scrape. Add some in ⚙️ Settings first.');
-    return;
-  }
-
+  const accounts = loadAccounts();
+  if (accounts.length === 0) { alert('No accounts to scrape. Add some in ⚙️ Settings first.'); return; }
   if (icon) icon.classList.add('spinning');
-  if (btn)  btn.disabled = true;
+  if (btn) btn.disabled = true;
   if (lastLabel) lastLabel.textContent = 'Starting scrape...';
-
   try {
-    const startRes  = await fetch('/api/apify?action=start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profiles: accounts })
-    });
+    const startRes = await fetch('/api/apify?action=start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles: accounts }) });
     const startData = await startRes.json();
     const runId = startData.runId;
     if (!runId) throw new Error('Failed to start Apify run');
-
     let datasetId = null, attempts = 0;
     while (attempts < 60) {
-      await new Promise(r => setTimeout(r, 5000));
-      attempts++;
+      await new Promise(r => setTimeout(r, 5000)); attempts++;
       if (lastLabel) lastLabel.textContent = `Scraping... (${attempts * 5}s)`;
-      const statusRes  = await fetch(`/api/apify?action=status&runId=${runId}`);
+      const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
       const statusData = await statusRes.json();
       if (statusData.status === 'SUCCEEDED') { datasetId = statusData.datasetId; break; }
       if (statusData.status === 'FAILED' || statusData.status === 'ABORTED') throw new Error('Apify run failed');
     }
     if (!datasetId) throw new Error('Timed out');
-
     if (lastLabel) lastLabel.textContent = 'Loading videos...';
-    const resultsRes  = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
+    const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
     if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in last 5 days');
-
     formats = resultsData.videos.map(v => ({
-      title:    v.title || 'No caption',
-      views:    v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
+      title: v.title || 'No caption',
+      views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
       comments: v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
-      url:      v.url,
-      thumbnail:v.thumbnail,
-      author:   v.author,
-      created:  v.created
+      url: v.url, thumbnail: v.thumbnail, author: v.author, created: v.created
     }));
-
     saveCache(formats);
     showCardUI(localStorage.getItem('kf_pulled'));
-
   } catch (err) {
-    if (icon)      icon.classList.remove('spinning');
-    if (btn)       btn.disabled = false;
+    if (icon) icon.classList.remove('spinning');
+    if (btn) btn.disabled = false;
     if (lastLabel) lastLabel.textContent = 'Refresh failed — try again';
     console.error(err);
   }
 }
 
-// ── Touch events ───────────────────────────────────────────────
+// ── Stage 1 touch events ───────────────────────────────────────
 function attachTouchEvents() {
   const card = document.getElementById('card');
   if (!card) return;
-  card.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-    isDragging = true; dragX = 0;
-  }, { passive: true });
+  card.addEventListener('touchstart', e => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isDragging = true; dragX = 0; }, { passive: true });
   card.addEventListener('touchmove', e => {
     if (!isDragging) return;
     dragX = e.touches[0].clientX - startX;
@@ -500,27 +671,16 @@ function attachTouchEvents() {
     if (Math.abs(dragX) < Math.abs(dragY) && Math.abs(dragX) < 10) return;
     card.style.transform = `translateX(${dragX}px) rotate(${dragX * 0.06}deg)`;
     const progress = Math.abs(dragX) > 30 ? Math.min((Math.abs(dragX) - 30) / 70, 1) : 0;
-    const sa = document.getElementById('stamp-a');
-    const sr = document.getElementById('stamp-r');
-    const ov = document.getElementById('bg-overlay');
+    const sa = document.getElementById('stamp-a'); const sr = document.getElementById('stamp-r'); const ov = document.getElementById('bg-overlay');
     if (sa) sa.style.opacity = dragX > 30 ? progress : 0;
     if (sr) sr.style.opacity = dragX < -30 ? progress : 0;
-    if (ov) {
-      ov.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent';
-      ov.style.opacity = progress;
-    }
+    if (ov) { ov.style.background = dragX > 30 ? 'rgba(29,158,117,0.15)' : dragX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent'; ov.style.opacity = progress; }
   }, { passive: true });
   card.addEventListener('touchend', () => {
-    if (!isDragging) return;
-    isDragging = false;
+    if (!isDragging) return; isDragging = false;
     if (dragX > 80) swipe('right');
     else if (dragX < -80) swipe('left');
-    else {
-      card.style.transform = '';
-      ['stamp-a','stamp-r','bg-overlay'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.style.opacity = 0;
-      });
-    }
+    else { card.style.transform = ''; ['stamp-a','stamp-r','bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; }); }
   });
 }
 
@@ -528,12 +688,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 // ── Boot ───────────────────────────────────────────────────────
 const cache = loadCache();
-if (cache && cache.videos.length > 0) {
-  formats = cache.videos;
-  showCardUI(cache.pulled);
-} else {
-  showEmptyState();
-}
+if (cache && cache.videos.length > 0) { formats = cache.videos; showCardUI(cache.pulled); }
+else showEmptyState();
 </script>
 </body>
 </html>
