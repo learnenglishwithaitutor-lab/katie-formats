@@ -40,6 +40,7 @@
       flex-direction: column;
       height: 100dvh;
       padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+      overflow: visible;
       max-width: 480px;
       margin: 0 auto;
     }
@@ -83,11 +84,12 @@
       flex: 1;
       position: relative;
       min-height: 0;
+      overflow: visible;
     }
 
     .card-stack {
       position: absolute;
-      inset: 0;
+      inset: 8px;
       overflow: visible;
     }
 
