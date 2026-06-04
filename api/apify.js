@@ -1,6 +1,7 @@
 const ACTOR_ID = 'GdWCkxBtKWOsKjdch';
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
-const PROFILES = [
+
+const DEFAULT_PROFILES = [
   'https://www.tiktok.com/@starvicks51',
   'https://www.tiktok.com/@fluently.kate',
   'https://www.tiktok.com/@lola_englishspeak',
@@ -9,17 +10,28 @@ const PROFILES = [
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
   const { action, runId, datasetId } = req.query;
 
   try {
     if (action === 'start') {
+      // Accept profiles from request body, fall back to defaults
+      let profiles = DEFAULT_PROFILES;
+      if (req.method === 'POST' && req.body?.profiles?.length > 0) {
+        profiles = req.body.profiles;
+      }
+
       const response = await fetch(
         `https://api.apify.com/v2/acts/${ACTOR_ID}/runs?token=${APIFY_TOKEN}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            profiles: PROFILES,
+            profiles,
             resultsPerPage: 30,
             shouldDownloadVideos: false,
             shouldDownloadCovers: false
@@ -51,13 +63,13 @@ export default async function handler(req, res) {
       const videos = items
         .filter(item => item.createTimeISO && new Date(item.createTimeISO).getTime() / 1000 > fiveDaysAgo)
         .map(item => ({
-          title:        item.text || item.desc || 'No caption',
-          views:        item.playCount || 0,
-          comments:     item.commentCount || 0,
-          url:          item.webVideoUrl || `https://www.tiktok.com/@${item.authorMeta?.name}/video/${item.id}`,
-          thumbnail:    item.videoMeta?.coverUrl || item.covers?.default || '',
-          author:       item.authorMeta?.name || '',
-          created:      item.createTimeISO
+          title:     item.text || item.desc || 'No caption',
+          views:     item.playCount || 0,
+          comments:  item.commentCount || 0,
+          url:       item.webVideoUrl || `https://www.tiktok.com/@${item.authorMeta?.name}/video/${item.id}`,
+          thumbnail: item.videoMeta?.coverUrl || item.covers?.default || '',
+          author:    item.authorMeta?.name || '',
+          created:   item.createTimeISO
         }));
 
       return res.status(200).json({ videos });

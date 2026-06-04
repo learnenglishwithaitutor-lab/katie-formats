@@ -78,6 +78,73 @@
     @keyframes spin-icon { to { transform: rotate(360deg); } }
     .refresh-icon.spinning { animation: spin-icon 0.8s linear infinite; }
     .last-pulled { font-size: 10px; color: var(--muted); }
+    .settings-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 0; font-size: 18px; line-height: 1;
+      color: var(--muted); margin-left: 6px;
+    }
+    .settings-btn:active { opacity: 0.5; }
+
+    /* Settings screen */
+    .settings-screen {
+      display: flex; flex-direction: column;
+      flex: 1; min-height: 0;
+    }
+    .settings-title {
+      font-size: 15px; font-weight: 600;
+      letter-spacing: -0.2px; margin-bottom: 4px;
+    }
+    .settings-sub {
+      font-size: 12px; color: var(--muted); margin-bottom: 16px;
+    }
+    .accounts-list {
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto; flex: 1; margin-bottom: 16px;
+    }
+    .account-row {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: 12px; padding: 10px 12px;
+    }
+    .account-handle {
+      flex: 1; font-size: 13px; font-weight: 500; color: var(--text);
+    }
+    .account-url {
+      font-size: 10px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 140px;
+    }
+    .remove-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 18px; color: var(--muted); padding: 0; line-height: 1;
+      flex-shrink: 0;
+    }
+    .remove-btn:active { color: var(--reject); }
+    .add-account-row {
+      display: flex; gap: 8px; align-items: center;
+      margin-bottom: 16px;
+    }
+    .add-input {
+      flex: 1; padding: 12px 14px;
+      border: 0.5px solid var(--border); border-radius: 12px;
+      font-size: 13px; font-family: inherit; background: var(--surface);
+      color: var(--text); outline: none;
+    }
+    .add-input:focus { border-color: var(--approve); }
+    .add-input::placeholder { color: var(--muted); }
+    .add-btn {
+      padding: 12px 16px; border-radius: 12px;
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      border: none; background: var(--approve); color: #fff; cursor: pointer;
+      flex-shrink: 0;
+    }
+    .add-btn:active { opacity: 0.8; }
+    .back-btn {
+      width: 100%; padding: 14px; border-radius: 14px;
+      font-size: 15px; font-weight: 600; font-family: inherit;
+      border: 0.5px solid var(--border); background: var(--surface);
+      color: var(--text); cursor: pointer; flex-shrink: 0;
+    }
 
     /* ── Progress ── */
     .progress-bar {
@@ -274,7 +341,120 @@ function formatPosted(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-// ── Header HTML ────────────────────────────────────────────────
+// ── Accounts ───────────────────────────────────────────────────
+const DEFAULT_ACCOUNTS = [
+  'https://www.tiktok.com/@starvicks51',
+  'https://www.tiktok.com/@fluently.kate',
+  'https://www.tiktok.com/@lola_englishspeak',
+  'https://www.tiktok.com/@keisha.learns'
+];
+
+function loadAccounts() {
+  try {
+    const a = localStorage.getItem('kf_accounts');
+    if (a) return JSON.parse(a);
+  } catch(e) {}
+  return [...DEFAULT_ACCOUNTS];
+}
+
+function saveAccounts(accounts) {
+  localStorage.setItem('kf_accounts', JSON.stringify(accounts));
+}
+
+function normalizeHandle(input) {
+  input = input.trim();
+  // Already a full URL
+  if (input.startsWith('https://www.tiktok.com/')) return input;
+  // @handle or handle
+  const handle = input.replace(/^@/, '');
+  return `https://www.tiktok.com/@${handle}`;
+}
+
+function handleFromUrl(url) {
+  const m = url.match(/tiktok\.com\/@([^/?]+)/);
+  return m ? '@' + m[1] : url;
+}
+
+function showSettings() {
+  const accounts = loadAccounts();
+  const pulled = localStorage.getItem('kf_pulled');
+
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <div class="header-left">
+        <h1>Accounts</h1>
+        <div class="total-count">${accounts.length} tracked</div>
+      </div>
+      <div class="header-right" style="justify-content:center;">
+        <button class="settings-btn" onclick="goBack()" style="font-size:14px;color:var(--text);font-weight:500;font-family:inherit;">✕ Close</button>
+      </div>
+    </div>
+    <div class="settings-screen">
+      <p class="settings-sub">Add any TikTok account. Next time you Refresh, videos from all accounts below will be pulled.</p>
+      <div class="add-account-row">
+        <input class="add-input" id="account-input" type="text" placeholder="@handle or tiktok.com/@handle" autocomplete="off" autocorrect="off" autocapitalize="off" />
+        <button class="add-btn" onclick="addAccount()">Add</button>
+      </div>
+      <div class="accounts-list" id="accounts-list">
+        ${renderAccountRows(accounts)}
+      </div>
+      <button class="back-btn" onclick="goBack()">← Back to review</button>
+    </div>
+  `;
+
+  // Allow Enter key to add
+  document.getElementById('account-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addAccount();
+  });
+}
+
+function renderAccountRows(accounts) {
+  if (accounts.length === 0) return `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0;">No accounts yet. Add one above.</p>`;
+  return accounts.map((url, i) => `
+    <div class="account-row">
+      <div style="flex:1;min-width:0;">
+        <div class="account-handle">${handleFromUrl(url)}</div>
+        <div class="account-url">${url}</div>
+      </div>
+      <button class="remove-btn" onclick="removeAccount(${i})">×</button>
+    </div>
+  `).join('');
+}
+
+function addAccount() {
+  const input = document.getElementById('account-input');
+  const val = input.value.trim();
+  if (!val) return;
+  const url = normalizeHandle(val);
+  const accounts = loadAccounts();
+  if (accounts.includes(url)) {
+    input.value = '';
+    return;
+  }
+  accounts.push(url);
+  saveAccounts(accounts);
+  input.value = '';
+  document.getElementById('accounts-list').innerHTML = renderAccountRows(accounts);
+  document.querySelector('.total-count').textContent = accounts.length + ' tracked';
+}
+
+function removeAccount(idx) {
+  const accounts = loadAccounts();
+  accounts.splice(idx, 1);
+  saveAccounts(accounts);
+  document.getElementById('accounts-list').innerHTML = renderAccountRows(accounts);
+  document.querySelector('.total-count').textContent = accounts.length + ' tracked';
+}
+
+function goBack() {
+  const cache = loadCache();
+  if (cache && cache.videos.length > 0) {
+    formats = cache.videos;
+    showCardUI(cache.pulled);
+  } else {
+    showEmptyState();
+  }
+}
 function headerHTML(pulledAt) {
   return `
     <div class="header">
@@ -283,9 +463,12 @@ function headerHTML(pulledAt) {
         <div class="total-count" id="total-count">${formats.length} videos to review</div>
       </div>
       <div class="header-right">
-        <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
-          <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
-        </button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
+            <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
+          </button>
+          <button class="settings-btn" onclick="showSettings()" title="Manage accounts">⚙️</button>
+        </div>
         <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
       </div>
     </div>
@@ -441,6 +624,7 @@ function showEmptyState() {
       <button onclick="triggerRefresh()" id="refresh-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;font-family:inherit;">
         Get fresh videos
       </button>
+      <button onclick="showSettings()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);font-family:inherit;padding:4px;">⚙️ Manage accounts</button>
       <p style="font-size:12px;color:#aaa;margin:0;">@starvicks51 · @fluently.kate · @lola_englishspeak · @keisha.learns</p>
     </div>
   `;
@@ -457,7 +641,11 @@ async function triggerRefresh() {
   if (lastLabel) lastLabel.textContent = 'Starting scrape...';
 
   try {
-    const startRes  = await fetch('/api/apify?action=start');
+    const startRes  = await fetch('/api/apify?action=start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profiles: loadAccounts() })
+    });
     const startData = await startRes.json();
     const runId     = startData.runId;
     if (!runId) throw new Error('Failed to start Apify run');
