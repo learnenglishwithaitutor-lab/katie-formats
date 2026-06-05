@@ -217,12 +217,12 @@ function formatPosted(iso) {
 }
 
 // ── Header ─────────────────────────────────────────────────────
-function headerHTML(pulledAt, countText, showHomeBtn=true) {
+function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review') {
   return `
     <div class="header">
       <div class="header-left">
-        ${showHomeBtn ? `<button onclick="showHome()" style="background:none;border:none;cursor:pointer;padding:0 0 3px 0;font-size:12px;color:var(--muted);font-family:inherit;display:block;letter-spacing:-0.1px;">← Home</button>` : ''}
-        <h1>Format review</h1>
+        ${showHomeBtn ? `<button onclick="showHome()" style="background:none;border:none;cursor:pointer;padding:0 0 3px 0;font-size:12px;color:var(--muted);font-family:inherit;display:block;">← Home</button>` : ''}
+        <h1>${title}</h1>
         ${countText ? `<div class="total-count" id="total-count">${countText}</div>` : ''}
       </div>
       <div class="header-right">
@@ -241,7 +241,7 @@ function headerHTML(pulledAt, countText, showHomeBtn=true) {
 function showCardUI(pulledAt) {
   current = 0; approved.length = 0; rejected.length = 0;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulledAt, formats.length + ' videos to review')}
+    ${headerHTML(pulledAt, formats.length + ' videos to review', true, 'Format review')}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -328,7 +328,7 @@ function swipe(dir) {
 function showStage1Done() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Format review')}
     <div class="done">
       <div class="check">✓</div>
       <h2>Formats reviewed</h2>
@@ -351,7 +351,7 @@ function showStage1Done() {
 async function startScriptGeneration() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="loading-screen">
       <div class="loading-spinner"></div>
       <div class="loading-title" id="loading-title">Transcribing videos...</div>
@@ -400,7 +400,7 @@ async function startScriptGeneration() {
   } catch (err) {
     console.error(err);
     document.getElementById('app').innerHTML = `
-      ${headerHTML(null, null)}
+      ${headerHTML(null, null, true, 'Generate videos')}
       <div class="done">
         <div class="check">⚠️</div>
         <h2>Something went wrong</h2>
@@ -416,7 +416,7 @@ function showScriptUI() {
   scriptCurrent = 0; approvedScripts.length = 0; rejectedScripts.length = 0;
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, 'Script review')}
+    ${headerHTML(pulled, 'Script review', true, 'Script review')}
     <div class="progress-bar"><div class="progress-fill" id="s-progress" style="width:${100/scripts.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -547,7 +547,7 @@ function attachScriptTouchEvents() {
 function showStage2Done() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Script review')}
     <div class="done">
       <div class="check">✓</div>
       <h2>Scripts reviewed</h2>
@@ -575,7 +575,7 @@ async function generateVideos() {
   const pulled = localStorage.getItem('kf_pulled');
   generatedVideos = [];
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="loading-screen">
       <div class="loading-spinner"></div>
       <div class="loading-title" id="loading-title">Submitting to HeyGen...</div>
@@ -646,7 +646,7 @@ async function generateVideos() {
   } catch (err) {
     console.error(err);
     document.getElementById('app').innerHTML = `
-      ${headerHTML(null, null)}
+      ${headerHTML(null, null, true, 'Generate videos')}
       <div class="done">
         <div class="check">⚠️</div>
         <h2>Something went wrong</h2>
@@ -662,7 +662,7 @@ function showStage3Done() {
   const completed = generatedVideos.filter(v => v.status === 'completed');
   const failed = generatedVideos.filter(v => v.status !== 'completed');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="done">
       <div class="check">🎬</div>
       <h2>Videos ready!</h2>
@@ -720,7 +720,7 @@ async function sendToSheet() {
 function showSettings() {
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null)}
+    ${headerHTML(pulled, null, true, 'Settings')}
     <div class="settings-screen">
       <div class="settings-section-title">Tracked accounts</div>
       <div class="accounts-list" id="accounts-list"></div>
