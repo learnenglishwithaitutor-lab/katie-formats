@@ -26,9 +26,8 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           video_inputs: [{
             character: {
-              type: 'avatar',
-              avatar_id: avatarId,
-              avatar_style: 'normal'
+              type: 'talking_photo',
+              talking_photo_id: avatarId,
             },
             voice: {
               type: 'text',
