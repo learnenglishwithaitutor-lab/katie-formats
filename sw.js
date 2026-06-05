@@ -1,4 +1,4 @@
-const CACHE = 'katie-formats-v28';
+const CACHE = 'katie-formats-v29';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -14,8 +14,15 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network-first for HTML — always get fresh app code
-  if (e.request.destination === 'document' || e.request.url.endsWith('/') || e.request.url.endsWith('index.html')) {
+  const url = new URL(e.request.url);
+
+  // Never intercept API calls — let them go straight to network
+  if (url.pathname.startsWith('/api/')) {
+    return; // don't call e.respondWith — browser handles it natively
+  }
+
+  // Network-first for HTML
+  if (e.request.destination === 'document' || url.pathname === '/' || url.pathname.endsWith('index.html')) {
     e.respondWith(
       fetch(e.request)
         .then(res => {
@@ -27,7 +34,8 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Cache-first for everything else (icons, manifest)
+
+  // Cache-first for static assets
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
