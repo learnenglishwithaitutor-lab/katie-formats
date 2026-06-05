@@ -24,17 +24,21 @@ export default async function handler(req, res) {
       }
     );
 
-    const items = await response.json();
+    const raw = await response.json();
 
-    // Map transcript back by URL
+    // Return raw for debugging if not an array
+    if (!Array.isArray(raw)) {
+      return res.status(200).json({ transcripts: {}, debug: raw });
+    }
+
     const transcripts = {};
-    for (const item of items) {
-      const url = item.video_url;
-      const text = item.plain_text || item.transcription?.plain_text_without_timestamps || '';
+    for (const item of raw) {
+      const url = item.video_url || item.videoUrl || item.input_url || item.url;
+      const text = item.plain_text || item.transcript || item.transcription?.plain_text_without_timestamps || '';
       if (url) transcripts[url] = text;
     }
 
-    return res.status(200).json({ transcripts });
+    return res.status(200).json({ transcripts, count: raw.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
