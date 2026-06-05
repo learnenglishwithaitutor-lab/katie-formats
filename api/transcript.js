@@ -18,7 +18,7 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          videoUrls: urls,
+          videoUrls: urls.map(u => ({ url: u })),
           sourceLanguage: 'auto'
         })
       }
