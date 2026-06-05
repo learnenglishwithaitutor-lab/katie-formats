@@ -349,6 +349,8 @@ function showStage1Done() {
 
 // ── Stage 2: Generate scripts ──────────────────────────────────
 async function startScriptGeneration() {
+  const cached = loadGeneratedScripts();
+  if (cached && cached.length > 0) { scripts = cached; showScriptUI(); return; }
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
@@ -395,6 +397,7 @@ async function startScriptGeneration() {
     }
 
     // Step 3: Show script review
+    saveGeneratedScripts(scripts);
     showScriptUI();
 
   } catch (err) {
@@ -572,6 +575,8 @@ function showStage2Done() {
 let generatedVideos = [];
 
 async function generateVideos() {
+  const cachedVids = loadGeneratedVideos();
+  if (cachedVids && cachedVids.length > 0) { generatedVideos = cachedVids; showStage3Done(); return; }
   const pulled = localStorage.getItem('kf_pulled');
   generatedVideos = [];
   document.getElementById('app').innerHTML = `
@@ -853,6 +858,14 @@ function attachTouchEvents() {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 // ── Approved state persistence ────────────────────────────────
+function saveGeneratedScripts(s) {
+  localStorage.setItem('kf_generated_scripts', JSON.stringify(s));
+  localStorage.setItem('kf_generated_scripts_date', new Date().toISOString());
+}
+function loadGeneratedScripts() {
+  try { const v = localStorage.getItem('kf_generated_scripts'); if (v) return JSON.parse(v); } catch(e) {}
+  return null;
+}
 function saveApprovedFormats(formats) {
   localStorage.setItem('kf_approved_formats', JSON.stringify(formats));
   localStorage.setItem('kf_approved_formats_date', new Date().toISOString());
@@ -889,6 +902,7 @@ function loadGeneratedVideos() {
 function clearAllApproved() {
   ['kf_approved_formats','kf_approved_formats_date',
    'kf_approved_scripts','kf_approved_scripts_date',
+   'kf_generated_scripts','kf_generated_scripts_date',
    'kf_generated_videos','kf_generated_videos_date'].forEach(k => localStorage.removeItem(k));
 }
 function shortDate(iso) {
