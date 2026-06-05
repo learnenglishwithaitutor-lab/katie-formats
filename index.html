@@ -332,20 +332,28 @@ function showStage1Done() {
     <div class="done">
       <div class="check">✓</div>
       <h2>Formats reviewed</h2>
-      <p>${approved.length} format${approved.length !== 1 ? 's' : ''} approved</p>
-      <div class="pills">
-        <span class="pill a">${approved.length} approved</span>
-        <span class="pill r">${rejected.length} skipped</span>
-      </div>
+      <p>${approved.length} approved · ${rejected.length} skipped</p>
       ${approved.length > 0 ? `
         <div class="approved-list">
           ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">♥ ${f.views}</span></div>`).join('')}
         </div>
-        <button class="btn-primary" onclick="startScriptGeneration()">Generate scripts →</button>
-      ` : '<p style="color:var(--muted);font-size:14px">No formats approved this round.</p>'}
-      <button class="btn-secondary" onclick="goBack()">Review again</button>
+        <button class="btn-primary" onclick="startScriptGeneration()">Continue to scripts →</button>
+      ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No formats approved.</p>'}
+      <button class="btn-secondary" onclick="reviewFormatsAgain()">Review again</button>
+      <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
 }
+
+function reviewFormatsAgain() {
+  approved.length = 0; rejected.length = 0;
+  saveApprovedFormats([]);
+  localStorage.removeItem('kf_generated_scripts'); localStorage.removeItem('kf_generated_scripts_date');
+  localStorage.removeItem('kf_approved_scripts'); localStorage.removeItem('kf_approved_scripts_date');
+  localStorage.removeItem('kf_generated_videos'); localStorage.removeItem('kf_generated_videos_date');
+  current = 0;
+  showCardUI(localStorage.getItem('kf_pulled'));
+}
+
 
 // ── Stage 2: Generate scripts ──────────────────────────────────
 async function startScriptGeneration() {
@@ -554,22 +562,27 @@ function showStage2Done() {
     <div class="done">
       <div class="check">✓</div>
       <h2>Scripts reviewed</h2>
-      <p>${approvedScripts.length} script${approvedScripts.length !== 1 ? 's' : ''} approved</p>
-      <div class="pills">
-        <span class="pill a">${approvedScripts.length} approved</span>
-        <span class="pill r">${rejectedScripts.length} skipped</span>
-      </div>
+      <p>${approvedScripts.length} approved · ${rejectedScripts.length} skipped</p>
       ${approvedScripts.length > 0 ? `
         <div class="approved-list">
-          ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">♥ ${s.format.views}</span></div>`).join('')}
+          ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">${s.script.slice(0,50)}...</span></div>`).join('')}
         </div>
-        <button class="btn-primary" onclick="generateVideos()">Generate HeyGen videos →</button>
-        <button class="btn-secondary" id="send-btn" onclick="sendToSheet()" style="margin-top:8px;border-color:var(--approve);color:var(--approve);">Send scripts to Sheet only</button>
-      ` : '<p style="color:var(--muted);font-size:14px">No scripts approved this round.</p>'}
-      <button class="btn-secondary" onclick="showScriptUI()">Review scripts again</button>
-      <button class="btn-secondary" onclick="goBack()">Back to formats</button>
+        <button class="btn-primary" onclick="generateVideos()">Continue to videos →</button>
+        <button class="btn-secondary" id="send-btn" onclick="sendToSheet()" style="border-color:var(--approve);color:var(--approve);">Send scripts to Sheet only</button>
+      ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No scripts approved.</p>'}
+      <button class="btn-secondary" onclick="reviewScriptsAgain()">Review again</button>
+      <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
 }
+
+function reviewScriptsAgain() {
+  approvedScripts.length = 0; rejectedScripts.length = 0;
+  saveApprovedScripts([]);
+  localStorage.removeItem('kf_generated_videos'); localStorage.removeItem('kf_generated_videos_date');
+  scriptCurrent = 0;
+  showScriptUI();
+}
+
 
 // ── Stage 3: Generate HeyGen videos ───────────────────────────
 let generatedVideos = [];
@@ -685,8 +698,16 @@ function showStage3Done() {
               : `<span style="font-size:11px;color:var(--reject);">Failed</span>`}
           </div>`).join('')}
       </div>
-      <button class="btn-secondary" onclick="goBack()" style="margin-top:8px;">Start over</button>
+      <button class="btn-secondary" onclick="regenerateVideos()">Regenerate</button>
+      <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
+}
+
+function regenerateVideos() {
+  generatedVideos = [];
+  localStorage.removeItem('kf_generated_videos');
+  localStorage.removeItem('kf_generated_videos_date');
+  generateVideos();
 }
 
 // ── Send to Sheet ──────────────────────────────────────────────
@@ -902,6 +923,7 @@ function loadGeneratedVideos() {
 function clearAllApproved() {
   ['kf_approved_formats','kf_approved_formats_date',
    'kf_approved_scripts','kf_approved_scripts_date',
+   'kf_generated_scripts','kf_generated_scripts_date',
    'kf_generated_videos','kf_generated_videos_date'].forEach(k => localStorage.removeItem(k));
 }
 function shortDate(iso) {
@@ -928,7 +950,7 @@ function showHome() {
   const hasGenerated = gv && gv.length > 0;
 
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null, false)}
+    ${headerHTML(pulled, null, false, 'Format review')}
     <div class="home-screen">
 
       <div class="stage-card ${!hasVideos ? 'disabled' : ''}" onclick="${hasVideos ? 'startStage1()' : ''}">
