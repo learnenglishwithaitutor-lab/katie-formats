@@ -36,7 +36,7 @@ export default async function handler(req, res) {
         }
       );
       const data = await response.json();
-      return res.status(200).json({ runId: data.data?.id, status: data.data?.status });
+      if (!data.data?.id) return res.status(200).json({ debug: data }); return res.status(200).json({ runId: data.data?.id, status: data.data?.status });
     }
 
     if (action === 'status' && runId) {
