@@ -13,8 +13,9 @@ export default async function handler(req, res) {
   try {
     // ── Generate video ──────────────────────────────────────────
     if (action === 'generate' && req.method === 'POST') {
-      const { script } = req.body;
+      const { script, avatar_id_override } = req.body;
       if (!script) return res.status(400).json({ error: 'No script provided' });
+      const avatarId = avatar_id_override || AVATAR_ID;
 
       const response = await fetch('https://api.heygen.com/v2/video/generate', {
         method: 'POST',
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
           video_inputs: [{
             character: {
               type: 'avatar',
-              avatar_id: AVATAR_ID,
+              avatar_id: avatarId,
               avatar_style: 'normal'
             },
             voice: {
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
       });
 
       const data = await response.json();
-      if (data.error) return res.status(400).json({ error: data.error });
+      if (data.error) return res.status(400).json({ error: data.error, raw: data });
       return res.status(200).json({ video_id: data.data?.video_id });
     }
 
