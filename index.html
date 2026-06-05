@@ -397,6 +397,7 @@ async function startScriptGeneration() {
     }
 
     // Step 3: Show script review
+    saveGeneratedScripts(scripts);
     showScriptUI();
 
   } catch (err) {
@@ -857,6 +858,14 @@ function attachTouchEvents() {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 // ── Approved state persistence ────────────────────────────────
+function saveGeneratedScripts(s) {
+  localStorage.setItem('kf_generated_scripts', JSON.stringify(s));
+  localStorage.setItem('kf_generated_scripts_date', new Date().toISOString());
+}
+function loadGeneratedScripts() {
+  try { const v = localStorage.getItem('kf_generated_scripts'); if (v) return JSON.parse(v); } catch(e) {}
+  return null;
+}
 function saveApprovedFormats(formats) {
   localStorage.setItem('kf_approved_formats', JSON.stringify(formats));
   localStorage.setItem('kf_approved_formats_date', new Date().toISOString());
