@@ -988,16 +988,36 @@ function startStage1() {
   const cache = loadCache();
   if (!cache) return;
   formats = cache.videos;
-  approved.length = 0; rejected.length = 0;
-  showCardUI(cache.pulled);
+  const savedApproved = loadApprovedFormats();
+  if (savedApproved && savedApproved.length > 0) {
+    // Already have approvals — show summary
+    approved.length = 0;
+    savedApproved.forEach(f => approved.push(f));
+    rejected.length = 0;
+    showStage1Done();
+  } else {
+    // No approvals yet — go straight to swipe
+    approved.length = 0; rejected.length = 0;
+    showCardUI(cache.pulled);
+  }
 }
 
 function startStage2() {
   const savedFormats = loadApprovedFormats();
-  if (!savedFormats) return;
+  if (!savedFormats || savedFormats.length === 0) return;
   approved.length = 0;
   savedFormats.forEach(f => approved.push(f));
-  startScriptGeneration();
+  const savedScripts = loadApprovedScripts();
+  if (savedScripts && savedScripts.length > 0) {
+    // Already have approved scripts — show summary
+    approvedScripts.length = 0;
+    savedScripts.forEach(s => approvedScripts.push(s));
+    rejectedScripts.length = 0;
+    showStage2Done();
+  } else {
+    // No approved scripts yet — go to generation/swipe
+    startScriptGeneration();
+  }
 }
 
 function startStage3() {
