@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 
     // First check if sheet has headers, if not add them
     const sheetRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:F1`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:G1`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const sheetData = await sheetRes.json();
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
     const values = [];
     if (!hasHeaders) {
-      values.push(['Date', 'Thumbnail', 'Source Account', 'Source Video URL', 'Original Caption', 'Generated Script']);
+      values.push(['Date', 'Thumbnail', 'Source Account', 'Source Video URL', 'Original Caption', 'Generated Script', 'Video URL']);
     }
 
     for (const row of rows) {
@@ -88,12 +88,13 @@ export default async function handler(req, res) {
         row.author ? `@${row.author}` : '',
         row.url || '',
         row.originalCaption || '',
-        row.script || ''
+        row.script || '',
+        row.video_url || ''
       ]);
     }
 
     const appendRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:F1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:G1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
         method: 'POST',
         headers: {
