@@ -642,7 +642,7 @@ async function triggerRefresh() {
     if (lastLabel) lastLabel.textContent = 'Loading videos...';
     const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
-    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in the last 5 days for these accounts. They may not have posted recently.');
+    if (!resultsData.videos || resultsData.videos.length === 0) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; if (lastLabel) lastLabel.textContent = 'No new posts in last 5 days'; return; }
     formats = resultsData.videos.map(v => ({
       title: v.title || 'No caption',
       views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
