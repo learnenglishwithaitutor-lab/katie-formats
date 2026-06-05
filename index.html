@@ -93,9 +93,13 @@
     .script-source { padding: 8px 14px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .script-source-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
     .script-source-handle { font-size: 11px; color: #1D9E75; font-weight: 600; }
-    .script-body { flex: 1; overflow-y: auto; padding: 14px 14px 16px; }
-    .script-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-    .script-text { font-size: 13px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .script-body { flex: 1; overflow-y: auto; padding: 0 0 16px; -webkit-overflow-scrolling: touch; }
+    .script-section { padding: 12px 14px 0; }
+    .script-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .script-text { font-size: 13px; line-height: 1.7; color: var(--text); word-break: break-word; }
+    .script-divider { margin: 14px 14px; border: none; border-top: 1.5px dashed var(--border); }
+    .script-katie { background: rgba(29,158,117,0.04); border-radius: 12px; padding: 12px; margin: 0 14px 16px; }
+    .script-katie .script-label { color: #1D9E75; }
 
     /* Settings */
     .settings-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; padding-top: 4px; }
@@ -371,7 +375,7 @@ async function startScriptGeneration() {
         })
       });
       const genData = await genRes.json();
-      scripts.push({ format: f, script: genData.script || '' });
+      scripts.push({ format: f, script: genData.script || '', transcript: transcripts[f.url] || '' });
     }
 
     // Step 3: Show script review
@@ -406,21 +410,40 @@ function showScriptUI() {
           <div class="stamp approve" id="s-stamp-a">APPROVE</div>
           <div class="stamp reject" id="s-stamp-r">SKIP</div>
           <div class="card-bg-overlay" id="s-bg-overlay"></div>
-          <div class="script-thumb" id="s-thumb"></div>
-          <div class="script-source">
-            <span class="script-source-label">Source</span>
-            <span class="script-source-handle" id="s-handle"></span>
-            <a id="s-link" href="#" target="_blank" style="margin-left:auto;font-size:11px;color:#5DCAA5;text-decoration:none;">View ↗</a>
+          <div id="s-swipe-zone">
+            <div class="script-thumb" id="s-thumb"></div>
+            <div class="script-source">
+              <span class="script-source-label">Source</span>
+              <span class="script-source-handle" id="s-handle"></span>
+              <a id="s-link" href="#" target="_blank" style="margin-left:auto;font-size:11px;color:#5DCAA5;text-decoration:none;">View ↗</a>
+              <span style="font-size:10px;color:var(--muted);margin-left:8px;" id="s-count">1/${scripts.length}</span>
+            </div>
           </div>
-          <div class="script-body">
-            <div class="script-label" id="s-count">Script 1 / ${scripts.length}</div>
-            <div class="script-text" id="s-text"></div>
+          <div class="script-body" id="s-body">
+            <div class="script-section">
+              <div class="script-label">Original</div>
+              <div class="script-text" id="s-original"></div>
+            </div>
+            <hr class="script-divider" />
+            <div class="script-katie">
+              <div class="script-label">Katie AI version</div>
+              <div class="script-text" id="s-text"></div>
+            </div>
           </div>
         </div>
       </div>
     </div>`;
   attachScriptTouchEvents();
   loadScriptCard(0);
+}
+
+function formatTranscript(text) {
+  if (!text) return 'No transcript available.';
+  // Split on sentence endings followed by space/caps, clean up
+  return text
+    .replace(/([.!?])\s+([A-Z])/g, '$1\n$2')
+    .replace(/([.!?])\s+(It means|Means|That means)/g, '$1\n$2')
+    .trim();
 }
 
 function loadScriptCard(idx) {
@@ -431,11 +454,15 @@ function loadScriptCard(idx) {
   const handle = document.getElementById('s-handle');
   const link = document.getElementById('s-link');
   const text = document.getElementById('s-text');
+  const original = document.getElementById('s-original');
+  const body = document.getElementById('s-body');
   if (prog) prog.style.width = `${((idx+1)/scripts.length)*100}%`;
-  if (count) count.textContent = `Script ${idx+1} / ${scripts.length}`;
+  if (count) count.textContent = `${idx+1}/${scripts.length}`;
   if (handle) handle.textContent = '@' + (s.format.author || 'unknown');
   if (link) link.href = s.format.url;
   if (text) text.textContent = s.script;
+  if (original) original.textContent = formatTranscript(s.transcript);
+  if (body) body.scrollTop = 0;
   if (thumb) {
     if (s.format.thumbnail) {
       thumb.innerHTML = `<a href="${s.format.url}" target="_blank" style="display:block;width:100%;height:100%;"><img src="${s.format.thumbnail}" style="width:100%;height:100%;object-fit:cover;" /></a>`;
@@ -463,14 +490,22 @@ function swipeScript(dir) {
 
 function attachScriptTouchEvents() {
   const card = document.getElementById('s-card');
-  if (!card) return;
+  const swipeZone = document.getElementById('s-swipe-zone');
+  if (!card || !swipeZone) return;
   let sX = 0, sY = 0, dragging = false, dX = 0;
-  card.addEventListener('touchstart', e => { sX = e.touches[0].clientX; sY = e.touches[0].clientY; dragging = true; dX = 0; }, { passive: true });
+
+  // Only start swipe detection from the swipe zone (thumb + source bar)
+  swipeZone.addEventListener('touchstart', e => {
+    sX = e.touches[0].clientX; sY = e.touches[0].clientY;
+    dragging = true; dX = 0;
+  }, { passive: true });
+
+  // Move can propagate from anywhere on the card
   card.addEventListener('touchmove', e => {
     if (!dragging) return;
     dX = e.touches[0].clientX - sX;
     const dY = e.touches[0].clientY - sY;
-    if (Math.abs(dX) < Math.abs(dY) && Math.abs(dX) < 10) return;
+    if (Math.abs(dX) < Math.abs(dY) && Math.abs(dX) < 10) { dragging = false; return; }
     card.style.transform = `translateX(${dX}px) rotate(${dX * 0.06}deg)`;
     const progress = Math.abs(dX) > 30 ? Math.min((Math.abs(dX) - 30) / 70, 1) : 0;
     const sa = document.getElementById('s-stamp-a');
@@ -480,6 +515,7 @@ function attachScriptTouchEvents() {
     if (sr) sr.style.opacity = dX < -30 ? progress : 0;
     if (ov) { ov.style.background = dX > 30 ? 'rgba(29,158,117,0.15)' : dX < -30 ? 'rgba(226,75,74,0.15)' : 'transparent'; ov.style.opacity = progress; }
   }, { passive: true });
+
   card.addEventListener('touchend', () => {
     if (!dragging) return; dragging = false;
     if (dX > 80) swipeScript('right');
