@@ -642,7 +642,7 @@ async function triggerRefresh() {
     if (lastLabel) lastLabel.textContent = 'Loading videos...';
     const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
-    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in last 5 days');
+    if (!resultsData.videos || resultsData.videos.length === 0) throw new Error('No videos found in the last 5 days for these accounts. They may not have posted recently.');
     formats = resultsData.videos.map(v => ({
       title: v.title || 'No caption',
       views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
@@ -654,7 +654,7 @@ async function triggerRefresh() {
   } catch (err) {
     if (icon) icon.classList.remove('spinning');
     if (btn) btn.disabled = false;
-    if (lastLabel) lastLabel.textContent = 'Refresh failed — try again';
+    if (lastLabel) lastLabel.textContent = err.message.length < 40 ? err.message : 'Refresh failed — try again';
     console.error(err);
   }
 }
