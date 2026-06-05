@@ -141,6 +141,20 @@
     .loading-spinner { width: 36px; height: 36px; border: 3px solid rgba(0,0,0,0.08); border-top-color: var(--approve); border-radius: 50%; animation: spin-icon 0.8s linear infinite; }
     .loading-title { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
     .loading-sub { font-size: 13px; color: var(--muted); }
+
+    /* Home screen */
+    .home-screen { flex: 1; display: flex; flex-direction: column; gap: 10px; padding-top: 4px; overflow-y: auto; }
+    .stage-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: opacity 0.1s; }
+    .stage-card:active { opacity: 0.7; }
+    .stage-card.disabled { opacity: 0.4; cursor: not-allowed; }
+    .stage-icon { font-size: 28px; flex-shrink: 0; width: 44px; text-align: center; }
+    .stage-info { flex: 1; min-width: 0; }
+    .stage-title { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 3px; }
+    .stage-meta { font-size: 11px; color: var(--muted); }
+    .stage-arrow { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+    .stage-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+    .stage-badge.ready { background: var(--approve-bg); color: var(--approve); }
+    .stage-badge.empty { background: rgba(0,0,0,0.06); color: var(--muted); }
   </style>
 </head>
 <body>
@@ -304,7 +318,7 @@ function swipe(dir) {
     card.classList.remove('animating','fly-right','fly-left');
     card.style.transform = '';
     ['stamp-a','stamp-r','bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
-    if (current >= formats.length) showStage1Done();
+    if (current >= formats.length) { saveApprovedFormats(approved); showStage1Done(); }
     else loadCard(current);
   }, 400);
 }
@@ -484,7 +498,7 @@ function swipeScript(dir) {
     card.classList.remove('animating','fly-right','fly-left');
     card.style.transform = '';
     ['s-stamp-a','s-stamp-r','s-bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
-    if (scriptCurrent >= scripts.length) showStage2Done();
+    if (scriptCurrent >= scripts.length) { saveApprovedScripts(approvedScripts); showStage2Done(); }
     else loadScriptCard(scriptCurrent);
   }, 400);
 }
@@ -608,6 +622,7 @@ async function generateVideos() {
     }
 
     generatedVideos = results;
+    saveGeneratedVideos(results);
 
     // Send to Sheet with video URLs
     setStatus('Saving to Google Sheet...', '');
@@ -744,11 +759,7 @@ function removeAccount(idx) {
   const accounts = loadAccounts(); accounts.splice(idx, 1); saveAccounts(accounts); renderAccountsList();
 }
 
-function goBack() {
-  const cache = loadCache();
-  if (cache && cache.videos.length > 0) { formats = cache.videos; showCardUI(cache.pulled); }
-  else showEmptyState();
-}
+function goBack() { showHome(); }
 
 // ── Empty state ────────────────────────────────────────────────
 function showEmptyState() {
@@ -769,6 +780,7 @@ function showEmptyState() {
 
 // ── Refresh ────────────────────────────────────────────────────
 async function triggerRefresh() {
+  clearAllApproved();
   const icon = document.getElementById('refresh-icon');
   const btn = document.getElementById('refresh-btn');
   const lastLabel = document.getElementById('last-pulled');
@@ -839,10 +851,134 @@ function attachTouchEvents() {
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
+// ── Approved state persistence ────────────────────────────────
+function saveApprovedFormats(formats) {
+  localStorage.setItem('kf_approved_formats', JSON.stringify(formats));
+  localStorage.setItem('kf_approved_formats_date', new Date().toISOString());
+}
+function loadApprovedFormats() {
+  try {
+    const v = localStorage.getItem('kf_approved_formats');
+    if (v) return JSON.parse(v);
+  } catch(e) {}
+  return null;
+}
+function saveApprovedScripts(scripts) {
+  localStorage.setItem('kf_approved_scripts', JSON.stringify(scripts));
+  localStorage.setItem('kf_approved_scripts_date', new Date().toISOString());
+}
+function loadApprovedScripts() {
+  try {
+    const v = localStorage.getItem('kf_approved_scripts');
+    if (v) return JSON.parse(v);
+  } catch(e) {}
+  return null;
+}
+function saveGeneratedVideos(videos) {
+  localStorage.setItem('kf_generated_videos', JSON.stringify(videos));
+  localStorage.setItem('kf_generated_videos_date', new Date().toISOString());
+}
+function loadGeneratedVideos() {
+  try {
+    const v = localStorage.getItem('kf_generated_videos');
+    if (v) return JSON.parse(v);
+  } catch(e) {}
+  return null;
+}
+function clearAllApproved() {
+  ['kf_approved_formats','kf_approved_formats_date',
+   'kf_approved_scripts','kf_approved_scripts_date',
+   'kf_generated_videos','kf_generated_videos_date'].forEach(k => localStorage.removeItem(k));
+}
+function shortDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+// ── Home screen ────────────────────────────────────────────────
+function showHome() {
+  const pulled = localStorage.getItem('kf_pulled');
+  const cache = loadCache();
+
+  const af = loadApprovedFormats();
+  const as_ = loadApprovedScripts();
+  const gv = loadGeneratedVideos();
+  const afDate = localStorage.getItem('kf_approved_formats_date');
+  const asDate = localStorage.getItem('kf_approved_scripts_date');
+  const gvDate = localStorage.getItem('kf_generated_videos_date');
+
+  const hasVideos = cache && cache.videos.length > 0;
+  const hasFormats = af && af.length > 0;
+  const hasScripts = as_ && as_.length > 0;
+  const hasGenerated = gv && gv.length > 0;
+
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null)}
+    <div class="home-screen">
+
+      <div class="stage-card ${!hasVideos ? 'disabled' : ''}" onclick="${hasVideos ? 'startStage1()' : ''}">
+        <div class="stage-icon">🎬</div>
+        <div class="stage-info">
+          <div class="stage-title">Review formats
+            ${hasFormats ? `<span class="stage-badge ready">${af.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasVideos ? `${cache.videos.length} videos from ${shortDate(pulled)}` : 'No videos yet — tap Refresh'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>
+
+      <div class="stage-card ${!hasFormats ? 'disabled' : ''}" onclick="${hasFormats ? 'startStage2()' : ''}">
+        <div class="stage-icon">✍️</div>
+        <div class="stage-info">
+          <div class="stage-title">Review scripts
+            ${hasScripts ? `<span class="stage-badge ready">${as_.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasFormats ? `${af.length} formats approved · ${shortDate(afDate)}` : 'Complete Stage 1 first'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>
+
+      <div class="stage-card ${!hasScripts ? 'disabled' : ''}" onclick="${hasScripts ? 'startStage3()' : ''}">
+        <div class="stage-icon">🎥</div>
+        <div class="stage-info">
+          <div class="stage-title">Generate videos
+            ${hasGenerated ? `<span class="stage-badge ready">${gv.length} generated</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasScripts ? `${as_.length} scripts approved · ${shortDate(asDate)}` : 'Complete Stage 2 first'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>
+
+    </div>`;
+}
+
+function startStage1() {
+  const cache = loadCache();
+  if (!cache) return;
+  formats = cache.videos;
+  approved.length = 0; rejected.length = 0;
+  showCardUI(cache.pulled);
+}
+
+function startStage2() {
+  const savedFormats = loadApprovedFormats();
+  if (!savedFormats) return;
+  approved.length = 0;
+  savedFormats.forEach(f => approved.push(f));
+  startScriptGeneration();
+}
+
+function startStage3() {
+  const savedScripts = loadApprovedScripts();
+  if (!savedScripts) return;
+  approvedScripts.length = 0;
+  savedScripts.forEach(s => approvedScripts.push(s));
+  generateVideos();
+}
+
 // ── Boot ───────────────────────────────────────────────────────
-const cache = loadCache();
-if (cache && cache.videos.length > 0) { formats = cache.videos; showCardUI(cache.pulled); }
-else showEmptyState();
+showHome();
 </script>
 </body>
 </html>
