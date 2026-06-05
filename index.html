@@ -34,9 +34,9 @@
     .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0 10px; flex-shrink: 0; }
     .header-left h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
     .header-left .total-count { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .header-right { display: flex; align-items: flex-start; gap: 10px; }
-    .header-right-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .icon-btn { background: none; border: none; cursor: pointer; padding: 2px; font-size: 17px; line-height: 1; color: var(--muted); }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    
+    .icon-btn { background: none; border: none; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; color: var(--muted); }
     .icon-btn:active { opacity: 0.5; }
     .refresh-btn { background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px; color: var(--text); font-size: 13px; font-weight: 500; font-family: inherit; }
     .refresh-btn:active { opacity: 0.5; }
@@ -206,13 +206,13 @@ function headerHTML(pulledAt, countText) {
         ${countText ? `<div class="total-count" id="total-count">${countText}</div>` : ''}
       </div>
       <div class="header-right">
-        <button class="icon-btn" onclick="showSettings()">⚙️</button>
-        <div class="header-right-inner">
+        <div style="display:flex;align-items:center;gap:10px;">
           <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
             <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
           </button>
-          <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
+          <button class="icon-btn" onclick="showSettings()">⚙️</button>
         </div>
+        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
       </div>
     </div>`;
 }
