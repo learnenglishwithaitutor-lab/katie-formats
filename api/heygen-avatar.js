@@ -1,4 +1,4 @@
-// v2
+// v3
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -6,31 +6,27 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { action, asset_id, name, avatar_group_id } = req.body;
+  const { action } = req.body;
 
   try {
-    if (action === 'create_photo_avatar') {
-      const body = {
-        image_asset_id: asset_id,
-        name: name || 'Sarah v2'
-      };
-      if (avatar_group_id) body.avatar_group_id = avatar_group_id;
-
-      const response = await fetch('https://api.heygen.com/v2/photo_avatar/avatar/create', {
+    // Register uploaded asset as a talking photo (returns talking_photo_id)
+    if (action === 'create_talking_photo') {
+      const { asset_id, name } = req.body;
+      const response = await fetch('https://api.heygen.com/v1/talking_photo', {
         method: 'POST',
         headers: {
           'X-Api-Key': process.env.HEYGEN_API_KEY,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ image_asset_id: asset_id, name: name || 'Sarah v2' })
       });
       const data = await response.json();
       return res.status(200).json(data);
     }
 
-    if (action === 'get_avatar') {
-      const { avatar_id } = req.body;
-      const response = await fetch(`https://api.heygen.com/v2/photo_avatar/${avatar_id}`, {
+    // List existing talking photos to find IDs
+    if (action === 'list_talking_photos') {
+      const response = await fetch('https://api.heygen.com/v1/talking_photo.list', {
         headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY }
       });
       const data = await response.json();
