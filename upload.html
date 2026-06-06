@@ -9,7 +9,7 @@
     h2:first-of-type { border-top: none; margin-top: 0; }
     label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
     input[type=text] { margin-bottom: 12px; width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-    button { padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    button { padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-bottom: 4px; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
     .status { margin-top: 8px; font-size: 13px; color: #666; min-height: 18px; }
     .err { color: #c00; } .ok { color: #060; }
@@ -17,9 +17,9 @@
   </style>
 </head>
 <body>
-  <h2>Step 1 — Upload image to S3 (via server)</h2>
-  <label>Select image</label>
-  <input type="file" id="img" accept="image/*" style="margin-bottom:12px;" /><br>
+  <h2>Step 1 — Upload image to S3</h2>
+  <label>Select sarah_new_realistic.png</label>
+  <input type="file" id="img" accept="image/png" style="margin-bottom:12px;" /><br>
   <button id="s3Btn" onclick="doS3Put()">Upload to S3</button>
   <p class="status" id="s3Status"></p>
   <div class="result" id="s3Result"></div>
@@ -37,8 +37,9 @@
   <div class="result" id="avatarResult"></div>
 
   <script>
-    const UPLOAD_URL = "https://heygen-resources-prod.s3-accelerate.amazonaws.com/external_upload_staging/880c1c10b7dd48df8f7b7a01038bb706/original.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA3FLD4S3AUVE3T26R%2F20260606%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20260606T110019Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption&X-Amz-Signature=272294c8068fb0f93dd24a7b9c9c9c98750eecbe724dc4f401d2d96099210211";
-    const ASSET_ID = "880c1c10b7dd48df8f7b7a01038bb706";
+    const UPLOAD_URL = "https://heygen-resources-prod.s3-accelerate.amazonaws.com/external_upload_staging/1e97c1da146540c0a330a54d5119fc58/original.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA3FLD4S3AUVE3T26R%2F20260606%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20260606T110925Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption&X-Amz-Signature=b707509257132c9c9e96dd858e04c53d958aaf51da9df0d1e652f114c62534ad";
+    const ASSET_ID = "1e97c1da146540c0a330a54d5119fc58";
+    const FILE_SIZE = 249318;
 
     async function toBase64(file) {
       return new Promise((res, rej) => {
@@ -54,22 +55,22 @@
       const s = document.getElementById('s3Status');
       const r = document.getElementById('s3Result');
       const btn = document.getElementById('s3Btn');
-      if (!file) { s.textContent = 'Select an image.'; s.className='status err'; return; }
+      if (!file) { s.textContent = 'Select the image file.'; s.className='status err'; return; }
+      if (file.size !== FILE_SIZE) {
+        s.textContent = 'Wrong file — expected ' + FILE_SIZE + ' bytes, got ' + file.size; s.className='status err'; return;
+      }
       btn.disabled = true; s.className='status'; s.textContent = 'Reading image...'; r.style.display='none';
       const b64 = await toBase64(file);
-      s.textContent = 'Sending to server for S3 upload...';
+      s.textContent = 'Uploading to S3 via server...';
       try {
         const resp = await fetch('/api/heygen-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 's3_put', imageBase64: b64, mimeType: file.type || 'image/png', uploadUrl: UPLOAD_URL, assetId: ASSET_ID })
+          body: JSON.stringify({ action: 's3_put', imageBase64: b64, mimeType: 'image/png', uploadUrl: UPLOAD_URL, assetId: ASSET_ID })
         });
         const d = await resp.json();
-        if (d.ok) {
-          s.textContent = 'S3 upload successful!'; s.className='status ok';
-        } else {
-          s.textContent = 'S3 status: ' + d.s3Status; s.className='status err';
-        }
+        if (d.ok) { s.textContent = 'S3 upload successful!'; s.className='status ok'; }
+        else { s.textContent = 'S3 failed (status ' + d.s3Status + ')'; s.className='status err'; }
         r.style.display='block'; r.textContent = JSON.stringify(d, null, 2);
       } catch(e) { s.textContent = 'Error: '+e.message; s.className='status err'; }
       btn.disabled = false;
