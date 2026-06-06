@@ -5,10 +5,24 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { action, assetId } = req.body;
+  const { action, imageBase64, mimeType, uploadUrl, assetId, name } = req.body;
 
   try {
-    // Complete a v3 asset upload after S3 PUT
+    if (action === 's3_put') {
+      const buffer = Buffer.from(imageBase64, 'base64');
+      const resp = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': mimeType || 'image/png',
+          'Content-Length': String(buffer.length),
+          'x-amz-server-side-encryption': 'AES256'
+        },
+        body: buffer
+      });
+      const text = await resp.text();
+      return res.status(200).json({ s3Status: resp.status, ok: resp.ok, body: text.slice(0, 200) });
+    }
+
     if (action === 'complete') {
       const resp = await fetch(`https://api.heygen.com/v3/assets/${assetId}/complete`, {
         method: 'POST',
@@ -18,9 +32,7 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    // Create photo avatar from v3 asset
     if (action === 'create_photo_avatar') {
-      const { name } = req.body;
       const resp = await fetch('https://api.heygen.com/v2/photo_avatar', {
         method: 'POST',
         headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' },
