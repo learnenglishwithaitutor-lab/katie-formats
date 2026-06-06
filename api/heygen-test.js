@@ -12,7 +12,6 @@ export default async function handler(req, res) {
   const { variant, video_id } = req.query;
 
   try {
-    // Check status
     if (video_id) {
       const r = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${video_id}`, {
         headers: { 'X-Api-Key': HEYGEN_KEY }
@@ -25,28 +24,20 @@ export default async function handler(req, res) {
       });
     }
 
-    // Generate test variant
-    // variant A: speed 1.0, no emotion
-    // variant B: speed 0.95, emotion Friendly
-    const speed = variant === 'B' ? 0.95 : 1.0;
-    const emotion = variant === 'B' ? 'Friendly' : undefined;
-
-    const voiceBlock = {
-      type: 'text',
-      input_text: TEST_SCRIPT,
-      voice_id: VOICE_ID,
-      speed
-    };
-    if (emotion) voiceBlock.emotion = emotion;
-
+    // Variant C: talking_photo type, speed 0.95, Friendly emotion
     const body = {
       video_inputs: [{
         character: {
-          type: 'avatar',
-          avatar_id: AVATAR_ID,
-          avatar_style: 'normal'
+          type: 'talking_photo',
+          talking_photo_id: AVATAR_ID
         },
-        voice: voiceBlock,
+        voice: {
+          type: 'text',
+          input_text: TEST_SCRIPT,
+          voice_id: VOICE_ID,
+          speed: 0.95,
+          emotion: 'Friendly'
+        },
         background: {
           type: 'color',
           value: '#f5f0eb'
@@ -64,7 +55,7 @@ export default async function handler(req, res) {
     });
     const d = await r.json();
     if (d.error) return res.status(400).json({ error: d.error, raw: d });
-    return res.status(200).json({ video_id: d.data?.video_id, variant, speed, emotion: emotion || 'none' });
+    return res.status(200).json({ video_id: d.data?.video_id, variant: 'C', notes: 'talking_photo, speed 0.95, Friendly' });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
