@@ -5,24 +5,40 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { imageBase64, mimeType = 'image/png' } = req.body;
-  if (!imageBase64) return res.status(400).json({ error: 'No imageBase64 provided' });
+  const { imageBase64, mimeType = 'image/png', uploadUrl, assetId } = req.body;
+  if (!imageBase64 || !uploadUrl || !assetId) {
+    return res.status(400).json({ error: 'Missing imageBase64, uploadUrl, or assetId' });
+  }
 
   try {
     const buffer = Buffer.from(imageBase64, 'base64');
 
-    const response = await fetch('https://upload.heygen.com/v1/asset', {
-      method: 'POST',
+    // Step 1: PUT to S3 presigned URL
+    const s3Resp = await fetch(uploadUrl, {
+      method: 'PUT',
       headers: {
-        'X-Api-Key': process.env.HEYGEN_API_KEY,
         'Content-Type': mimeType,
+        'Content-Length': buffer.length,
+        'x-amz-server-side-encryption': 'AES256'
       },
       body: buffer
     });
 
-    const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: data });
-    return res.status(200).json(data);
+    if (!s3Resp.ok) {
+      const text = await s3Resp.text();
+      return res.status(500).json({ error: 'S3 upload failed', status: s3Resp.status, body: text.slice(0, 300) });
+    }
+
+    // Step 2: Complete the upload
+    const completeResp = await fetch(`https://api.heygen.com/v3/assets/${assetId}/complete`, {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': process.env.HEYGEN_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+    const completeData = await completeResp.json();
+    return res.status(200).json({ s3Status: s3Resp.status, complete: completeData });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
