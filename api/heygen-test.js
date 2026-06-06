@@ -1,6 +1,6 @@
 const HEYGEN_KEY = process.env.HEYGEN_API_KEY;
 const VOICE_ID = 'bfa319fcf29646678baa4716c7f72f86';
-const AVATAR_ID = '30cc2bb61cd44adb90ce84b4f1ef2fce';
+const IMAGE_URL = 'https://raw.githubusercontent.com/learnenglishwithaitutor-lab/katie-formats/main/sarah_new_realistic.png';
 const DEFAULT_SCRIPT = `I used to freeze every time I had to speak English at work. My heart would race and my mind would go blank. I knew the words, but they just wouldn't come out. If that sounds familiar, I made this for you.`;
 
 export default async function handler(req, res) {
@@ -27,36 +27,25 @@ export default async function handler(req, res) {
     const script = req.body?.script || DEFAULT_SCRIPT;
 
     const body = {
-      video_inputs: [{
-        character: {
-          type: 'talking_photo',
-          talking_photo_id: AVATAR_ID
-        },
-        voice: {
-          type: 'text',
-          input_text: script,
-          voice_id: VOICE_ID,
-          speed: 0.95,
-          emotion: 'Friendly'
-        },
-        background: {
-          type: 'color',
-          value: '#f5f0eb'
-        }
-      }],
-      dimension: { width: 1080, height: 1920 },
-      aspect_ratio: null,
-      test: false
+      image: { type: 'url', url: IMAGE_URL },
+      script,
+      voice_id: VOICE_ID,
+      voice_settings: { speed: 0.95 },
+      expressiveness: 'high',
+      motion_prompt: 'speak naturally with warm expressive facial movements, subtle head nods, natural blinking',
+      aspect_ratio: '9:16',
+      background: { type: 'color', value: '#f5f0eb' },
+      title: 'Sarah test - create_video_from_image'
     };
 
-    const r = await fetch('https://api.heygen.com/v2/video/generate', {
+    const r = await fetch('https://api.heygen.com/v3/video/from-image', {
       method: 'POST',
       headers: { 'X-Api-Key': HEYGEN_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const d = await r.json();
     if (d.error) return res.status(400).json({ error: d.error, raw: d });
-    return res.status(200).json({ video_id: d.data?.video_id });
+    return res.status(200).json({ video_id: d.data?.video_id, notes: 'create_video_from_image, expressiveness high' });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
