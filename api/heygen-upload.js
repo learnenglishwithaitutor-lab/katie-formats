@@ -8,14 +8,14 @@ export default async function handler(req, res) {
   const { action, imageUrl, name } = req.body;
 
   try {
-    if (action === 'create_photo_avatar') {
-      const resp = await fetch('https://api.heygen.com/v2/photo_avatar', {
+    if (action === 'create_talking_photo') {
+      const resp = await fetch('https://api.heygen.com/v1/talking_photo', {
         method: 'POST',
         headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_url: imageUrl, name: name || 'Sarah v2' })
       });
-      const data = await resp.json();
-      return res.status(200).json(data);
+      const text = await resp.text();
+      return res.status(resp.status).send(text);
     }
     return res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
