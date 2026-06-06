@@ -17,10 +17,11 @@ export default async function handler(req, res) {
           'Content-Length': String(buffer.length),
           'x-amz-server-side-encryption': 'AES256'
         },
-        body: buffer
+        body: buffer,
+        duplex: 'half'
       });
       const text = await resp.text();
-      return res.status(200).json({ s3Status: resp.status, ok: resp.ok, body: text.slice(0, 200) });
+      return res.status(200).json({ s3Status: resp.status, ok: resp.ok, body: text.slice(0, 300) });
     }
 
     if (action === 'complete') {
