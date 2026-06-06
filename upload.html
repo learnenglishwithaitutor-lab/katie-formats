@@ -2,33 +2,38 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>HeyGen Tools</title>
+  <title>HeyGen Photo Avatar Creator</title>
   <style>
     body { font-family: sans-serif; max-width: 520px; margin: 60px auto; padding: 0 24px; color: #111; }
-    h2 { font-size: 16px; font-weight: 600; margin: 32px 0 8px; border-top: 1px solid #eee; padding-top: 24px; }
+    h2 { font-size: 15px; font-weight: 600; margin: 28px 0 8px; border-top: 1px solid #eee; padding-top: 20px; }
     h2:first-of-type { border-top: none; margin-top: 0; }
-    label { font-size: 13px; color: #666; display: block; margin-bottom: 6px; }
+    label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
     input[type=file], input[type=text] { margin-bottom: 12px; width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
     button { padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .status { margin-top: 10px; font-size: 13px; color: #666; min-height: 18px; }
-    .err { color: #c00; }
-    .ok { color: #060; }
-    .result { margin-top: 10px; background: #f4f4f4; border-radius: 8px; padding: 12px 16px; font-family: monospace; font-size: 13px; word-break: break-all; display: none; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .status { margin-top: 8px; font-size: 13px; color: #666; min-height: 18px; }
+    .err { color: #c00; } .ok { color: #060; }
+    .result { margin-top: 8px; background: #f4f4f4; border-radius: 6px; padding: 10px 14px; font-family: monospace; font-size: 12px; word-break: break-all; white-space: pre-wrap; display: none; }
   </style>
 </head>
 <body>
-
-  <h2>Step 1 — Upload image</h2>
-  <label>Select image file</label>
+  <h2>Step 1 — Upload image to S3</h2>
+  <label>Upload URL (from Claude)</label>
+  <input type="text" id="uploadUrl" placeholder="https://heygen-resources-prod.s3-accelerate..." />
+  <label>Asset ID (from Claude)</label>
+  <input type="text" id="assetId" value="880c1c10b7dd48df8f7b7a01038bb706" />
+  <label>Image file</label>
   <input type="file" id="img" accept="image/*" />
-  <button id="uploadBtn" onclick="uploadImage()">Upload</button>
-  <p class="status" id="uploadStatus"></p>
-  <div class="result" id="uploadResult"></div>
+  <button id="s3Btn" onclick="uploadToS3()">Upload to S3</button>
+  <p class="status" id="s3Status"></p>
+  <div class="result" id="s3Result"></div>
 
-  <h2>Step 2 — Create photo avatar</h2>
-  <label>Asset ID (from step 1)</label>
-  <input type="text" id="assetId" placeholder="paste asset_id here" />
+  <h2>Step 2 — Complete upload</h2>
+  <button id="completeBtn" onclick="completeUpload()">Complete upload</button>
+  <p class="status" id="completeStatus"></p>
+  <div class="result" id="completeResult"></div>
+
+  <h2>Step 3 — Create photo avatar</h2>
   <label>Avatar name</label>
   <input type="text" id="avatarName" value="Sarah v2 - Realistic" />
   <button id="avatarBtn" onclick="createAvatar()">Create avatar</button>
@@ -36,81 +41,70 @@
   <div class="result" id="avatarResult"></div>
 
   <script>
-    async function uploadImage() {
+    async function uploadToS3() {
       const file = document.getElementById('img').files[0];
-      const status = document.getElementById('uploadStatus');
-      const result = document.getElementById('uploadResult');
-      const btn = document.getElementById('uploadBtn');
-      if (!file) { status.textContent = 'Select an image first.'; status.className = 'status err'; return; }
-      btn.disabled = true;
-      status.className = 'status';
-      status.textContent = 'Reading image...';
-      result.style.display = 'none';
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(',')[1]);
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
-      status.textContent = 'Uploading...';
+      const uploadUrl = document.getElementById('uploadUrl').value.trim();
+      const s = document.getElementById('s3Status');
+      const r = document.getElementById('s3Result');
+      const btn = document.getElementById('s3Btn');
+      if (!file) { s.textContent = 'Select a file.'; s.className='status err'; return; }
+      if (!uploadUrl) { s.textContent = 'Paste the upload URL.'; s.className='status err'; return; }
+      btn.disabled = true; s.className='status'; s.textContent = 'Uploading to S3...'; r.style.display='none';
+      try {
+        const resp = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || 'image/png', 'x-amz-server-side-encryption': 'AES256' },
+          body: file
+        });
+        if (resp.ok) {
+          s.textContent = 'S3 upload done! (status ' + resp.status + ')'; s.className='status ok';
+          r.style.display='block'; r.textContent = 'HTTP ' + resp.status;
+        } else {
+          const t = await resp.text();
+          s.textContent = 'S3 failed: ' + resp.status; s.className='status err';
+          r.style.display='block'; r.textContent = t.slice(0,300);
+        }
+      } catch(e) { s.textContent = 'Error: '+e.message; s.className='status err'; }
+      btn.disabled = false;
+    }
+
+    async function completeUpload() {
+      const assetId = document.getElementById('assetId').value.trim();
+      const s = document.getElementById('completeStatus');
+      const r = document.getElementById('completeResult');
+      const btn = document.getElementById('completeBtn');
+      if (!assetId) { s.textContent = 'No asset ID.'; s.className='status err'; return; }
+      btn.disabled = true; s.className='status'; s.textContent = 'Completing...'; r.style.display='none';
       try {
         const resp = await fetch('/api/heygen-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: b64, mimeType: file.type || 'image/png' })
+          body: JSON.stringify({ action: 'complete', assetId })
         });
-        const data = await resp.json();
-        if (!resp.ok || data.error) {
-          status.textContent = 'Failed: ' + JSON.stringify(data.error);
-          status.className = 'status err';
-          btn.disabled = false;
-          return;
-        }
-        const id = data.data?.id || data.id;
-        status.textContent = 'Uploaded!';
-        status.className = 'status ok';
-        result.style.display = 'block';
-        result.textContent = 'asset_id: ' + id;
-        document.getElementById('assetId').value = id;
-      } catch (e) {
-        status.textContent = 'Error: ' + e.message;
-        status.className = 'status err';
-      }
+        const d = await resp.json();
+        s.textContent = 'Done!'; s.className='status ok';
+        r.style.display='block'; r.textContent = JSON.stringify(d, null, 2);
+      } catch(e) { s.textContent = 'Error: '+e.message; s.className='status err'; }
       btn.disabled = false;
     }
 
     async function createAvatar() {
-      const asset_id = document.getElementById('assetId').value.trim();
+      const assetId = document.getElementById('assetId').value.trim();
       const name = document.getElementById('avatarName').value.trim();
-      const status = document.getElementById('avatarStatus');
-      const result = document.getElementById('avatarResult');
+      const s = document.getElementById('avatarStatus');
+      const r = document.getElementById('avatarResult');
       const btn = document.getElementById('avatarBtn');
-      if (!asset_id) { status.textContent = 'Enter an asset_id first.'; status.className = 'status err'; return; }
-      btn.disabled = true;
-      status.className = 'status';
-      status.textContent = 'Creating avatar...';
-      result.style.display = 'none';
+      btn.disabled = true; s.className='status'; s.textContent = 'Creating avatar...'; r.style.display='none';
       try {
-        const resp = await fetch('/api/heygen-avatar', {
+        const resp = await fetch('/api/heygen-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create_photo_avatar', asset_id, name })
+          body: JSON.stringify({ action: 'create_photo_avatar', assetId, name })
         });
-        const data = await resp.json();
-        if (!resp.ok || data.error) {
-          status.textContent = 'Failed: ' + JSON.stringify(data.error || data);
-          status.className = 'status err';
-          btn.disabled = false;
-          return;
-        }
-        status.textContent = 'Avatar created! (training may take a few minutes)';
-        status.className = 'status ok';
-        result.style.display = 'block';
-        result.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        status.textContent = 'Error: ' + e.message;
-        status.className = 'status err';
-      }
+        const d = await resp.json();
+        s.textContent = 'Done!'; s.className='status ok';
+        r.style.display='block'; r.textContent = JSON.stringify(d, null, 2);
+      } catch(e) { s.textContent = 'Error: '+e.message; s.className='status err'; }
       btn.disabled = false;
     }
   </script>
