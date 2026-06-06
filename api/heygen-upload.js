@@ -5,44 +5,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { action, imageBase64, mimeType, uploadUrl, assetId, name } = req.body;
+  const { action, imageUrl, name } = req.body;
 
   try {
-    if (action === 's3_put') {
-      const buffer = Buffer.from(imageBase64, 'base64');
-      const resp = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': mimeType || 'image/png',
-          'Content-Length': String(buffer.length),
-          'x-amz-server-side-encryption': 'AES256'
-        },
-        body: buffer,
-        duplex: 'half'
-      });
-      const text = await resp.text();
-      return res.status(200).json({ s3Status: resp.status, ok: resp.ok, body: text.slice(0, 300) });
-    }
-
-    if (action === 'complete') {
-      const resp = await fetch(`https://api.heygen.com/v3/assets/${assetId}/complete`, {
-        method: 'POST',
-        headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' }
-      });
-      const data = await resp.json();
-      return res.status(200).json(data);
-    }
-
     if (action === 'create_photo_avatar') {
       const resp = await fetch('https://api.heygen.com/v2/photo_avatar', {
         method: 'POST',
         headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_asset_id: assetId, name: name || 'Sarah v2' })
+        body: JSON.stringify({ image_url: imageUrl, name: name || 'Sarah v2' })
       });
       const data = await resp.json();
       return res.status(200).json(data);
     }
-
     return res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
