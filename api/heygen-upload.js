@@ -5,40 +5,32 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { imageBase64, mimeType = 'image/png', uploadUrl, assetId } = req.body;
-  if (!imageBase64 || !uploadUrl || !assetId) {
-    return res.status(400).json({ error: 'Missing imageBase64, uploadUrl, or assetId' });
-  }
+  const { action, assetId } = req.body;
 
   try {
-    const buffer = Buffer.from(imageBase64, 'base64');
-
-    // Step 1: PUT to S3 presigned URL
-    const s3Resp = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Length': buffer.length,
-        'x-amz-server-side-encryption': 'AES256'
-      },
-      body: buffer
-    });
-
-    if (!s3Resp.ok) {
-      const text = await s3Resp.text();
-      return res.status(500).json({ error: 'S3 upload failed', status: s3Resp.status, body: text.slice(0, 300) });
+    // Complete a v3 asset upload after S3 PUT
+    if (action === 'complete') {
+      const resp = await fetch(`https://api.heygen.com/v3/assets/${assetId}/complete`, {
+        method: 'POST',
+        headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' }
+      });
+      const data = await resp.json();
+      return res.status(200).json(data);
     }
 
-    // Step 2: Complete the upload
-    const completeResp = await fetch(`https://api.heygen.com/v3/assets/${assetId}/complete`, {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': process.env.HEYGEN_API_KEY,
-        'Content-Type': 'application/json'
-      }
-    });
-    const completeData = await completeResp.json();
-    return res.status(200).json({ s3Status: s3Resp.status, complete: completeData });
+    // Create photo avatar from v3 asset
+    if (action === 'create_photo_avatar') {
+      const { name } = req.body;
+      const resp = await fetch('https://api.heygen.com/v2/photo_avatar', {
+        method: 'POST',
+        headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_asset_id: assetId, name: name || 'Sarah v2' })
+      });
+      const data = await resp.json();
+      return res.status(200).json(data);
+    }
+
+    return res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
