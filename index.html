@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v14 -->
+  <!-- BUST-v15 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -578,8 +578,11 @@ function reviewScriptsAgain() {
   showScriptUI();
 }
 
-// ── Stage 3: Generate HeyGen videos ───────────────────────────
+// ── Stage 3: Generate Omni videos via kie.ai ──────────────────
 let generatedVideos = [];
+
+// kie.ai status values that mean "still running"
+const KIE_PENDING = new Set(['waiting', 'queuing', 'generating', 'processing']);
 
 async function generateVideos() {
   const cachedVids = loadGeneratedVideos();
@@ -590,8 +593,8 @@ async function generateVideos() {
     ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="loading-screen">
       <div class="loading-spinner"></div>
-      <div class="loading-title" id="loading-title">Submitting to HeyGen...</div>
-      <div class="loading-sub" id="loading-sub">1-3 minutes per video</div>
+      <div class="loading-title" id="loading-title">Building Omni prompts...</div>
+      <div class="loading-sub" id="loading-sub">Submitting to kie.ai — ~2 min per video</div>
     </div>`;
 
   const setStatus = (title, sub) => {
@@ -602,57 +605,56 @@ async function generateVideos() {
   };
 
   try {
-    // Submit all to HeyGen
+    // Step 1: Submit all scripts to Omni pipeline
     const results = [];
     for (let i = 0; i < approvedScripts.length; i++) {
       const s = approvedScripts[i];
       setStatus(`Submitting ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
-      const res = await fetch('/api/heygen?action=generate', {
+      const res = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: s.script })
+        body: JSON.stringify({ action: 'generate', script: s.script })
       });
       const data = await res.json();
-      if (data.error) throw new Error('HeyGen: ' + data.error);
-      results.push({ video_id: data.video_id, scriptObj: s, status: 'processing', video_url: null });
+      if (data.error) throw new Error('Omni: ' + data.error);
+      results.push({
+        taskId: data.taskId,
+        promptText: data.promptText,
+        scriptObj: s,
+        status: 'processing',
+        video_url: null
+      });
     }
 
-    // Poll until all complete
+    // Step 2: Poll until all complete (10s intervals, up to 60 attempts = 10 min)
     let attempts = 0;
-    while (attempts < 72) {
-      await new Promise(r => setTimeout(r, 5000));
+    while (attempts < 60) {
+      await new Promise(r => setTimeout(r, 10000));
       attempts++;
       const pending = results.filter(r => r.status === 'processing');
       const done = results.length - pending.length;
-      setStatus(`Generating... (${attempts * 5}s)`, `${done}/${results.length} complete`);
+      setStatus(`Generating... (${attempts * 10}s elapsed)`, `${done} / ${results.length} complete`);
       for (const item of pending) {
-        const sr = await fetch(`/api/heygen?action=status&video_id=${item.video_id}`);
-        const sd = await sr.json();
-        if (sd.status === 'completed') { item.status = 'completed'; item.video_url = sd.video_url; item.thumbnail_url = sd.thumbnail_url; }
-        else if (sd.status === 'failed') { item.status = 'failed'; }
+        try {
+          const sr = await fetch(`/api/omni?action=status&taskId=${item.taskId}`);
+          const sd = await sr.json();
+          if (sd.status === 'success' && sd.videoUrl) {
+            item.status = 'completed';
+            item.video_url = sd.videoUrl;
+          } else if (sd.status === 'fail') {
+            item.status = 'failed';
+          }
+          // waiting/queuing/generating/processing → leave as 'processing'
+        } catch(e) { /* keep polling */ }
       }
       if (results.every(r => r.status !== 'processing')) break;
     }
 
+    // Anything still processing after timeout → mark failed
+    results.forEach(r => { if (r.status === 'processing') r.status = 'failed'; });
+
     generatedVideos = results;
     saveGeneratedVideos(results);
-
-    // Send to Sheet with video URLs
-    setStatus('Saving to Google Sheet...', '');
-    const rows = results.map(r => ({
-      author: r.scriptObj.format.author,
-      url: r.scriptObj.format.url,
-      thumbnail: r.scriptObj.format.thumbnail,
-      originalCaption: r.scriptObj.format.title,
-      script: r.scriptObj.script,
-      video_url: r.video_url || 'Failed'
-    }));
-    await fetch('/api/sheets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows })
-    });
-
     showStage3Done();
 
   } catch (err) {
@@ -678,7 +680,7 @@ function showStage3Done() {
     <div class="done">
       <div class="check">🎬</div>
       <h2>Videos ready!</h2>
-      <p>${completed.length} video${completed.length !== 1 ? 's' : ''} generated & saved to Sheet</p>
+      <p>${completed.length} video${completed.length !== 1 ? 's' : ''} generated</p>
       <div class="pills">
         <span class="pill a">${completed.length} done</span>
         ${failed.length > 0 ? `<span class="pill r">${failed.length} failed</span>` : ''}
