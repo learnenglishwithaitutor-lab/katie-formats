@@ -21,7 +21,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         system: `You are a script writer for Katie AI, an English speaking practice app that helps non-native English speakers become confident in real-life conversations.
 
@@ -37,9 +37,6 @@ Your job is to recreate TikTok video scripts in the same style and format as the
 
     const data = await response.json();
     const script = data.content?.[0]?.text || '';
-    if (!script) {
-      return res.status(200).json({ script: '', debug: data });
-    }
     return res.status(200).json({ script });
   } catch (err) {
     return res.status(500).json({ error: err.message });
