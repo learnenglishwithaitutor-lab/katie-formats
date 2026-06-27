@@ -112,7 +112,6 @@ async function pollKieTask(taskId) {
   }
   return { status, videoUrl, failMsg };
 }
-}
 
 // ── Main handler ───────────────────────────────────────────────
 export default async function handler(req, res) {
