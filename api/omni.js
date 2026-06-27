@@ -159,7 +159,7 @@ export default async function handler(req, res) {
     // Step 2: Upload Norah assets to kie.ai (they need to be hosted on kie's servers)
     const [kieImageUrl, kieVoiceUrl] = await Promise.all([
       uploadToKie(NORAH_START_FRAME_URL, 'image/png', 'luna_start_frame.png'),
-      uploadToKie(NORAH_VOICE_REF_URL,   'audio/mpeg', 'norah_voice.mp3')
+      uploadToKie(NORAH_VOICE_REF_URL,   'video/mp4',  'norah_voice.mp4')
     ]);
 
     // Step 3: Submit task
