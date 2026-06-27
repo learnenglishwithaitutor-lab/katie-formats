@@ -255,8 +255,13 @@ function showCardUI(pulledAt) {
           <div class="meta" id="meta"></div>
         </div>
       </div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 10px 0;flex-shrink:0;">
+      <button onclick="swipe('left')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:0.5px solid var(--border);background:var(--surface);color:var(--reject);cursor:pointer;font-family:inherit;">✕ Skip</button>
+      <button onclick="swipe('right')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:none;background:var(--approve);color:#fff;cursor:pointer;font-family:inherit;">✓ Approve</button>
     </div>`;
   attachTouchEvents();
+  document.onkeydown = (e) => { if (e.key === 'ArrowRight') swipe('right'); else if (e.key === 'ArrowLeft') swipe('left'); };
   loadCard(0);
 }
 
@@ -455,8 +460,13 @@ function showScriptUI() {
           </div>
         </div>
       </div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 10px 0;flex-shrink:0;">
+      <button onclick="swipeScript('left')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:0.5px solid var(--border);background:var(--surface);color:var(--reject);cursor:pointer;font-family:inherit;">✕ Skip</button>
+      <button onclick="swipeScript('right')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:none;background:var(--approve);color:#fff;cursor:pointer;font-family:inherit;">✓ Approve</button>
     </div>`;
   attachScriptTouchEvents();
+  document.onkeydown = (e) => { if (e.key === 'ArrowRight') swipeScript('right'); else if (e.key === 'ArrowLeft') swipeScript('left'); };
   loadScriptCard(0);
 }
 
