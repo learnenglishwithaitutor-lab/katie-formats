@@ -117,8 +117,8 @@ export default async function handler(req, res) {
     if (action !== 'status') return res.status(400).json({ error: 'Unknown action' });
     if (!taskId) return res.status(400).json({ error: 'taskId required' });
     try {
-      const { status, videoUrl } = await pollKieTask(taskId);
-      return res.status(200).json({ status, videoUrl });
+      const result = await pollKieTask(taskId);
+      return res.status(200).json(result);
     } catch(err) {
       return res.status(500).json({ error: err.message });
     }
