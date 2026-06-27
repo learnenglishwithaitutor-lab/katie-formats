@@ -37,6 +37,9 @@ Your job is to recreate TikTok video scripts in the same style and format as the
 
     const data = await response.json();
     const script = data.content?.[0]?.text || '';
+    if (!script) {
+      return res.status(200).json({ script: '', debug: data });
+    }
     return res.status(200).json({ script });
   } catch (err) {
     return res.status(500).json({ error: err.message });
