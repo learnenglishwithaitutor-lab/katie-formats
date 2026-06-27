@@ -616,7 +616,7 @@ async function generateVideos() {
         body: JSON.stringify({ action: 'generate', script: s.script })
       });
       const data = await res.json();
-      if (data.error) throw new Error('Omni: ' + data.error);
+      if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
       results.push({
         taskId: data.taskId,
         promptText: data.promptText,
