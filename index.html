@@ -654,6 +654,7 @@ async function generateVideos() {
             item.video_url = sd.videoUrl;
           } else if (sd.status === 'fail') {
             item.status = 'failed';
+            item.failMsg = sd.failMsg || 'Generation failed';
           }
           // waiting/queuing/generating/processing → leave as 'processing'
         } catch(e) { /* keep polling */ }
@@ -702,7 +703,7 @@ function showStage3Done() {
             <span class="t">@${v.scriptObj?.format?.author || 'unknown'}</span>
             ${v.video_url
               ? `<a href="${v.video_url}" target="_blank" style="font-size:11px;color:#1D9E75;font-weight:600;text-decoration:none;white-space:nowrap;">Watch ↗</a>`
-              : `<span style="font-size:11px;color:var(--reject);">Failed</span>`}
+              : `<span style="font-size:11px;color:var(--reject);" title="${v.failMsg || ''}">Failed</span>`}
           </div>`).join('')}
       </div>
       <button class="btn-secondary" onclick="regenerateVideos()">Regenerate</button>

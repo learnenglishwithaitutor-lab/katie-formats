@@ -93,15 +93,25 @@ async function pollKieTask(taskId) {
   const record = data?.data;
   if (!record) throw new Error('kie.ai: empty poll response');
 
-  const status = record.status; // waiting | queuing | generating | processing | success | fail
+  // kie.ai uses `state`: waiting | queuing | generating | success | fail
+  const rawState = record.state;
+  let status = 'processing';
+  if (rawState === 'success') status = 'success';
+  else if (rawState === 'fail') status = 'fail';
+
   let videoUrl = null;
+  let failMsg = null;
   if (status === 'success' && record.resultJson) {
     try {
       const parsed = JSON.parse(record.resultJson);
       videoUrl = parsed?.resultUrls?.[0] || null;
     } catch(e) {}
   }
-  return { status, videoUrl, _debugRecord: record };
+  if (status === 'fail') {
+    failMsg = record.failMsg || 'Generation failed';
+  }
+  return { status, videoUrl, failMsg };
+}
 }
 
 // ── Main handler ───────────────────────────────────────────────
