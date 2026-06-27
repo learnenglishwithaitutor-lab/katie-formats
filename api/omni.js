@@ -101,7 +101,7 @@ async function pollKieTask(taskId) {
       videoUrl = parsed?.resultUrls?.[0] || null;
     } catch(e) {}
   }
-  return { status, videoUrl };
+  return { status, videoUrl, _debugRecord: record };
 }
 
 // ── Main handler ───────────────────────────────────────────────
