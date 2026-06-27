@@ -610,10 +610,11 @@ async function generateVideos() {
     for (let i = 0; i < approvedScripts.length; i++) {
       const s = approvedScripts[i];
       setStatus(`Submitting ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+      console.log('script object keys:', Object.keys(s), 'script value:', s.script);
       const res = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', script: s.script })
+        body: JSON.stringify({ action: 'generate', script: s.script || s.text || s.katie_script || '' })
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
