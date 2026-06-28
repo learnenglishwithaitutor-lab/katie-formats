@@ -54,17 +54,17 @@ Rules:
 }
 
 // ── Submit generation task to kie.ai ──────────────────────────
-async function submitKieTask(promptText) {
-  const body = {
-    model: 'gemini-omni-video',
-    input: {
-      prompt: promptText,
-      image_urls: [NORAH_START_FRAME_URL],
-      video_list: [{ url: NORAH_VOICE_REF_URL, start: 0, ends: 12 }],
-      duration: '8',
-      aspect_ratio: '9:16'
-    }
+async function submitKieTask(promptText, noVoice) {
+  const input = {
+    prompt: promptText,
+    image_urls: [NORAH_START_FRAME_URL],
+    duration: '8',
+    aspect_ratio: '9:16'
   };
+  if (!noVoice) {
+    input.video_list = [{ url: NORAH_VOICE_REF_URL, start: 0, ends: 12 }];
+  }
+  const body = { model: 'gemini-omni-video', input };
   const res = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: {
@@ -138,10 +138,11 @@ export default async function handler(req, res) {
 
   const body = req.body || {};
   const script = body.script;
+  const noVoice = body.noVoice === true;
 
   if (!script) return res.status(400).json({ error: 'script required' });
   if (!NORAH_START_FRAME_URL) return res.status(500).json({ error: 'NORAH_START_FRAME_URL env var not set' });
-  if (!NORAH_VOICE_REF_URL)   return res.status(500).json({ error: 'NORAH_VOICE_REF_URL env var not set' });
+  if (!noVoice && !NORAH_VOICE_REF_URL) return res.status(500).json({ error: 'NORAH_VOICE_REF_URL env var not set' });
   if (!KIE_TOKEN)             return res.status(500).json({ error: 'KIE_API_TOKEN env var not set' });
 
   try {
@@ -150,7 +151,7 @@ export default async function handler(req, res) {
     if (!promptText) throw new Error('Claude returned empty prompt');
 
     // Step 2: Submit task directly — Norah URLs already hosted on kie.ai
-    const taskId = await submitKieTask(promptText);
+    const taskId = await submitKieTask(promptText, noVoice);
 
     return res.status(200).json({ taskId, promptText });
   } catch(err) {
