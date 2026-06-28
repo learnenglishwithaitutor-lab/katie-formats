@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v15 -->
+  <!-- BUST-v16 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -594,6 +594,53 @@ let generatedVideos = [];
 // kie.ai status values that mean "still running"
 const KIE_PENDING = new Set(['waiting', 'queuing', 'generating', 'processing']);
 
+// Render the Omni prompt text to a PNG (the "image-prompt hack").
+// Black text on white, ~1200x900, word-wrapped. Returns base64 (no data: prefix).
+function renderPromptToPng(promptText) {
+  const W = 1200, H = 900;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#000000';
+  ctx.font = '24px Arial, sans-serif';
+  ctx.textBaseline = 'top';
+
+  const margin = 50;
+  const maxWidth = W - margin * 2;
+  const lineHeight = 34;
+  let y = 40;
+
+  const wrapLine = (text) => {
+    const words = text.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const word of words) {
+      const test = cur ? cur + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && cur) {
+        lines.push(cur);
+        cur = word;
+      } else {
+        cur = test;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+
+  for (const paragraph of promptText.split('\n')) {
+    if (paragraph.trim() === '') { y += 18; continue; }
+    for (const line of wrapLine(paragraph)) {
+      ctx.fillText(line, margin, y);
+      y += lineHeight;
+    }
+  }
+
+  // strip the "data:image/png;base64," prefix
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
 async function generateVideos() {
   const cachedVids = loadGeneratedVideos();
   if (cachedVids && cachedVids.length > 0) { generatedVideos = cachedVids; showStage3Done(); return; }
@@ -615,22 +662,38 @@ async function generateVideos() {
   };
 
   try {
-    // Step 1: Submit all scripts to Omni pipeline
+    // Step 1: For each script — get prompt text, render to PNG, submit
     const results = [];
     for (let i = 0; i < approvedScripts.length; i++) {
       const s = approvedScripts[i];
+      const scriptText = s.script || s.text || s.katie_script || '';
+
+      // 1a. Ask Claude for the Omni prompt text
+      setStatus(`Writing prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+      const pr = await fetch('/api/omni', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prompt', script: scriptText })
+      });
+      const pd = await pr.json();
+      if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
+
+      // 1b. Render the prompt text to a PNG (image-prompt hack)
+      setStatus(`Rendering prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+      const promptPng = renderPromptToPng(pd.promptText);
+
+      // 1c. Submit: upload PNG + create task
       setStatus(`Submitting ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
-      console.log('script object keys:', Object.keys(s), 'script value:', s.script);
       const res = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', script: s.script || s.text || s.katie_script || '' })
+        body: JSON.stringify({ action: 'generate', promptPng })
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
       results.push({
         taskId: data.taskId,
-        promptText: data.promptText,
+        promptText: pd.promptText,
         scriptObj: s,
         status: 'processing',
         video_url: null

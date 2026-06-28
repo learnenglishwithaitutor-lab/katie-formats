@@ -1,10 +1,17 @@
 // ── Norah hardcoded assets (set in Vercel env vars) ───────────
+// These kie.ai URLs contain the original filenames in their path
+// (luna_start_frame.png, norah_new_voice.mp4) so the image-prompt
+// hack can reference them by name.
 const NORAH_START_FRAME_URL = process.env.NORAH_START_FRAME_URL;
 const NORAH_VOICE_REF_URL   = process.env.NORAH_VOICE_REF_URL;
 const KIE_TOKEN             = process.env.KIE_API_TOKEN;
 const ANTHROPIC_KEY         = process.env.ANTHROPIC_API_KEY;
 
-// ── Generate Omni prompt text via Claude ───────────────────────
+const KIE_UPLOAD_URL = 'https://kieai.redpandaai.co/api/file-stream-upload';
+const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
+const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
+
+// ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
 async function generateOmniPrompt(script) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -18,29 +25,25 @@ async function generateOmniPrompt(script) {
       max_tokens: 1024,
       system: `You write video generation prompts for Gemini Omni (Google Flow). You are given a Katie AI TikTok script and you output a complete Omni prompt following this exact block structure:
 
-Block 1 — Action & Script:
 Generate a video of this girl saying the following, clearly and naturally:
 "[script goes here word by word with delivery notes in parentheses, e.g. (enthusiastically), (slower), (smiling)]"
 
-Block 2 — Voice:
-Use the video attached as reference for her voice. Make sure she is naturally expressive when she is speaking.
+Use the video attached as reference for her voice (norah_new_voice.mp4). Make sure she is naturally expressive when she is speaking.
 
-Block 3 — Movement Breakdown:
-Describe realistic movement beats timed 0:00–0:10, using 2–4 second segments. Account for every second. Specify which hand (left/right) for gestures. Keep it natural for a talking-head TikTok. Format each line as:
-0:00-0:03 | [Beat description]
+Movement:
+0:00-0:03 | [body action tied to script — specify left/right hand]
+0:03-0:06 | [next beat]
+0:06-0:10 | [closing beat]
 
-Block 4 — Setting:
-One sentence. Home/bedroom background, casual and warm. Naturally expressive.
-
-Block 5 — Format:
-Vertical 9:16, phone-camera UGC aesthetic, no captions.
+Setting: Home bedroom background, casual and warm, naturally expressive.
+Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.
 
 Rules:
-- Output ONLY the prompt text — no labels, no block headings, no preamble, no explanation
-- Keep script under 28 words for 10 seconds
-- If the script is longer than 28 words, truncate naturally at a sentence boundary
-- Delivery notes like (enthusiastically), (warmly), (slower and clearer) go inline after each phrase
-- Movement should match a warm, engaging English tutor talking to camera — hands gesturing naturally, leaning slightly in on key points
+- Output ONLY the prompt text — no labels like "Block 1", no preamble, no explanation
+- Keep script under 28 words for 10 seconds; if longer, truncate at a sentence boundary
+- Delivery notes like (enthusiastically), (warmly), (slower) go inline after each phrase
+- Movement: warm, engaging English tutor talking to camera — hands gesturing naturally, leaning slightly in on key points
+- Always name the voice file as norah_new_voice.mp4 in the voice line
 - Do NOT use detachable props
 - CAPS for emphasis words only, sparingly`,
       messages: [{
@@ -50,22 +53,48 @@ Rules:
     })
   });
   const data = await response.json();
+  if (data.error) throw new Error(`Claude: ${data.error.message || JSON.stringify(data.error)}`);
   return data.content?.[0]?.text || '';
 }
 
-// ── Submit generation task to kie.ai ──────────────────────────
-async function submitKieTask(promptText, noVoice) {
+// ── Upload a base64 PNG to kie.ai, return hosted URL ──────────
+async function uploadPromptPng(base64Data) {
+  // base64Data is the raw base64 (no data: prefix)
+  const buffer = Buffer.from(base64Data, 'base64');
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: 'image/png' }), 'prompt.png');
+  form.append('uploadPath', 'katie/prompt.png');
+
+  const res = await fetch(KIE_UPLOAD_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${KIE_TOKEN}` },
+    body: form
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`kie.ai upload failed (${res.status}): ${t}`);
+  }
+  const data = await res.json();
+  const url = data?.data?.downloadUrl;
+  if (!url) throw new Error(`kie.ai upload: no downloadUrl. Response: ${JSON.stringify(data)}`);
+  return url;
+}
+
+// ── Submit generation task (image-prompt hack) ────────────────
+async function submitKieTask(promptPngUrl, noVoice) {
   const input = {
-    prompt: promptText,
-    image_urls: [NORAH_START_FRAME_URL],
+    // The real prompt lives in the PNG. This text just points Omni to it.
+    prompt: 'Read prompt.png. Use luna_start_frame.png as the starting image for norah_new_voice.mp4',
+    // Prompt PNG first, Norah start frame second
+    image_urls: [promptPngUrl, NORAH_START_FRAME_URL],
     duration: '8',
     aspect_ratio: '9:16'
   };
   if (!noVoice) {
-    input.video_list = [{ url: NORAH_VOICE_REF_URL, start: 0, ends: 12 }];
+    input.video_list = [{ url: NORAH_VOICE_REF_URL, start: 0, ends: 10 }];
   }
   const body = { model: 'gemini-omni-video', input };
-  const res = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  const res = await fetch(KIE_CREATE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -78,6 +107,9 @@ async function submitKieTask(promptText, noVoice) {
     throw new Error(`kie.ai createTask failed (${res.status}): ${errText}`);
   }
   const data = await res.json();
+  if (data.code && data.code !== 200) {
+    throw new Error(`kie.ai: ${data.msg || 'createTask error'} (code ${data.code})`);
+  }
   const taskId = data?.data?.taskId;
   if (!taskId) throw new Error(`kie.ai: no taskId returned. Response: ${JSON.stringify(data)}`);
   return taskId;
@@ -85,7 +117,7 @@ async function submitKieTask(promptText, noVoice) {
 
 // ── Poll kie.ai task status ────────────────────────────────────
 async function pollKieTask(taskId) {
-  const res = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+  const res = await fetch(`${KIE_POLL_URL}?taskId=${taskId}`, {
     headers: { 'Authorization': `Bearer ${KIE_TOKEN}` }
   });
   if (!res.ok) throw new Error(`kie.ai poll failed: ${res.status}`);
@@ -107,9 +139,7 @@ async function pollKieTask(taskId) {
       videoUrl = parsed?.resultUrls?.[0] || null;
     } catch(e) {}
   }
-  if (status === 'fail') {
-    failMsg = record.failMsg || 'Generation failed';
-  }
+  if (status === 'fail') failMsg = record.failMsg || 'Generation failed';
   return { status, videoUrl, failMsg };
 }
 
@@ -133,28 +163,40 @@ export default async function handler(req, res) {
     }
   }
 
-  // POST { action: 'generate', script: '...' }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
   const body = req.body || {};
-  const script = body.script;
-  const noVoice = body.noVoice === true;
+  const action = body.action;
 
-  if (!script) return res.status(400).json({ error: 'script required' });
-  if (!NORAH_START_FRAME_URL) return res.status(500).json({ error: 'NORAH_START_FRAME_URL env var not set' });
-  if (!noVoice && !NORAH_VOICE_REF_URL) return res.status(500).json({ error: 'NORAH_VOICE_REF_URL env var not set' });
-  if (!KIE_TOKEN)             return res.status(500).json({ error: 'KIE_API_TOKEN env var not set' });
-
-  try {
-    // Step 1: Generate Omni prompt via Claude
-    const promptText = await generateOmniPrompt(script);
-    if (!promptText) throw new Error('Claude returned empty prompt');
-
-    // Step 2: Submit task directly — Norah URLs already hosted on kie.ai
-    const taskId = await submitKieTask(promptText, noVoice);
-
-    return res.status(200).json({ taskId, promptText });
-  } catch(err) {
-    return res.status(500).json({ error: err.message });
+  // ── action=prompt: Claude generates the prompt text (for the PNG) ──
+  if (action === 'prompt') {
+    const script = body.script;
+    if (!script) return res.status(400).json({ error: 'script required' });
+    if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+    try {
+      const promptText = await generateOmniPrompt(script);
+      if (!promptText) throw new Error('Claude returned empty prompt');
+      return res.status(200).json({ promptText });
+    } catch(err) {
+      return res.status(500).json({ error: err.message });
+    }
   }
+
+  // ── action=generate: upload the rendered PNG + submit task ──
+  if (action === 'generate') {
+    const promptPng = body.promptPng; // base64 (no data: prefix)
+    const noVoice = body.noVoice === true;
+    if (!promptPng) return res.status(400).json({ error: 'promptPng required' });
+    if (!NORAH_START_FRAME_URL) return res.status(500).json({ error: 'NORAH_START_FRAME_URL not set' });
+    if (!noVoice && !NORAH_VOICE_REF_URL) return res.status(500).json({ error: 'NORAH_VOICE_REF_URL not set' });
+    if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
+    try {
+      const promptPngUrl = await uploadPromptPng(promptPng);
+      const taskId = await submitKieTask(promptPngUrl, noVoice);
+      return res.status(200).json({ taskId, promptPngUrl });
+    } catch(err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  return res.status(400).json({ error: 'Unknown action' });
 }
