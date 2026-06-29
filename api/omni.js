@@ -12,7 +12,6 @@ const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
 const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
-async function generateOmniPrompt(script) {
 async function generateOmniPrompt(script, thumbnailUrl) {
   // Try to fetch the original's thumbnail so Claude can ground the
   // movement breakdown in what the creator is actually doing.
