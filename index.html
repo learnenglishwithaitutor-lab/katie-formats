@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v17 -->
+  <!-- BUST-v18 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -134,6 +134,10 @@
     .approved-item:last-child { border-bottom: none; }
     .approved-item .t { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
     .approved-item .v { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .video-results { width: 100%; margin-bottom: 16px; text-align: left; display: flex; flex-direction: column; gap: 14px; }
+    .video-result { border: 0.5px solid var(--border); border-radius: 14px; padding: 12px; }
+    .video-result-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .video-result-head .t { font-size: 13px; font-weight: 500; }
     .btn-primary { width: 100%; padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--approve); color: #fff; font-family: inherit; }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-secondary { width: 100%; padding: 13px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); margin-top: 10px; font-family: inherit; }
@@ -760,13 +764,18 @@ function showStage3Done() {
         <span class="pill a">${completed.length} done</span>
         ${failed.length > 0 ? `<span class="pill r">${failed.length} failed</span>` : ''}
       </div>
-      <div class="approved-list">
+      <div class="video-results">
         ${generatedVideos.map(v => `
-          <div class="approved-item">
-            <span class="t">@${v.scriptObj?.format?.author || 'unknown'}</span>
+          <div class="video-result">
+            <div class="video-result-head">
+              <span class="t">@${v.scriptObj?.format?.author || 'unknown'}</span>
+              ${v.video_url
+                ? `<a href="${v.video_url}" target="_blank" download style="font-size:11px;color:#1D9E75;font-weight:600;text-decoration:none;white-space:nowrap;">Download ↓</a>`
+                : `<span style="font-size:11px;color:var(--reject);" title="${v.failMsg || ''}">Failed</span>`}
+            </div>
             ${v.video_url
-              ? `<a href="${v.video_url}" target="_blank" style="font-size:11px;color:#1D9E75;font-weight:600;text-decoration:none;white-space:nowrap;">Watch ↗</a>`
-              : `<span style="font-size:11px;color:var(--reject);" title="${v.failMsg || ''}">Failed</span>`}
+              ? `<video src="${v.video_url}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;background:#000;margin-top:8px;max-height:70vh;"></video>`
+              : `<div style="font-size:12px;color:var(--reject);margin-top:6px;">${v.failMsg || 'Generation failed'}</div>`}
           </div>`).join('')}
       </div>
       <button class="btn-secondary" onclick="regenerateVideos()">Regenerate</button>
