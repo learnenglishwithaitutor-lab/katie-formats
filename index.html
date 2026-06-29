@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v18 -->
+  <!-- BUST-v19 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -677,7 +677,7 @@ async function generateVideos() {
       const pr = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'prompt', script: scriptText })
+        body: JSON.stringify({ action: 'prompt', script: scriptText, thumbnail: s.format?.thumbnail || null })
       });
       const pd = await pr.json();
       if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);

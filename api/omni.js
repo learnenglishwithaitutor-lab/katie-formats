@@ -13,6 +13,37 @@ const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
 async function generateOmniPrompt(script) {
+async function generateOmniPrompt(script, thumbnailUrl) {
+  // Try to fetch the original's thumbnail so Claude can ground the
+  // movement breakdown in what the creator is actually doing.
+  // Falls back to text-only if the fetch fails (never breaks the pipeline).
+  let imageBlock = null;
+  if (thumbnailUrl) {
+    try {
+      const imgRes = await fetch(thumbnailUrl);
+      if (imgRes.ok) {
+        const ct = imgRes.headers.get('content-type') || 'image/jpeg';
+        if (ct.startsWith('image/')) {
+          const buf = Buffer.from(await imgRes.arrayBuffer());
+          // Keep within sane size limits for the vision API
+          if (buf.length > 0 && buf.length < 4_500_000) {
+            imageBlock = {
+              type: 'image',
+              source: { type: 'base64', media_type: ct.split(';')[0], data: buf.toString('base64') }
+            };
+          }
+        }
+      }
+    } catch (e) { /* fall back to text-only */ }
+  }
+
+  const userContent = imageBlock
+    ? [
+        imageBlock,
+        { type: 'text', text: `The image above is the opening frame of the ORIGINAL TikTok we are recreating. Study what the creator is physically doing — their gestures, hand positions, posture, framing (close-up vs waist-up), and energy. Then write the Omni prompt for this Katie AI script, with a movement breakdown that echoes that same gesture style and energy, adapted to Norah talking to camera.\n\nScript:\n${script}` }
+      ]
+    : `Write the Omni prompt for this Katie AI script:\n\n${script}`;
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -23,7 +54,7 @@ async function generateOmniPrompt(script) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: `You write video generation prompts for Gemini Omni (Google Flow). You are given a Katie AI TikTok script and you output a complete Omni prompt following this exact block structure:
+      system: `You write video generation prompts for Gemini Omni (Google Flow). You are given a Katie AI TikTok script — and usually the opening frame of the original video — and you output a complete Omni prompt following this exact block structure:
 
 Generate a video of this girl saying the following, clearly and naturally:
 "[script goes here word by word with delivery notes in parentheses, e.g. (enthusiastically), (slower), (smiling)]"
@@ -38,18 +69,21 @@ Movement:
 Setting: Home bedroom background, casual and warm, naturally expressive.
 Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.
 
+How to use the original frame (if provided):
+- Study what the creator is physically DOING — pointing, counting on fingers, holding up a hand, leaning in, reacting, framing (close-up vs waist-up), overall energy.
+- Write the movement breakdown to ECHO that gesture style and energy, adapted to Norah talking to camera. If they point at two options, Norah points. If they count on fingers, Norah counts. If it's a punchy close-up reaction, make the beats punchy.
+- Do NOT transplant the original's location — Norah is always in her own home/bedroom (her start frame is fixed). Only the GESTURE STYLE, ENERGY, and FRAMING carry over, never the background.
+- If no image is provided, infer natural, engaging tutor gestures from the script.
+
 Rules:
 - Output ONLY the prompt text — no labels like "Block 1", no preamble, no explanation
 - Keep script under 28 words for 10 seconds; if longer, truncate at a sentence boundary
 - Delivery notes like (enthusiastically), (warmly), (slower) go inline after each phrase
-- Movement: warm, engaging English tutor talking to camera — hands gesturing naturally, leaning slightly in on key points
+- Make the movement breakdown specific and assertive — name the hand, the gesture, and the word it lands on. Vague filler makes the avatar just stand and talk.
 - Always name the voice file as norah_new_voice.mp4 in the voice line
-- Do NOT use detachable props
+- Do NOT use detachable props (Norah's start frame has none — never add a prop she'd have to hold)
 - CAPS for emphasis words only, sparingly`,
-      messages: [{
-        role: 'user',
-        content: `Write the Omni prompt for this Katie AI script:\n\n${script}`
-      }]
+      messages: [{ role: 'user', content: userContent }]
     })
   });
   const data = await response.json();
@@ -176,10 +210,11 @@ export default async function handler(req, res) {
   // ── action=prompt: Claude generates the prompt text (for the PNG) ──
   if (action === 'prompt') {
     const script = body.script;
+    const thumbnail = body.thumbnail || null;
     if (!script) return res.status(400).json({ error: 'script required' });
     if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
     try {
-      const promptText = await generateOmniPrompt(script);
+      const promptText = await generateOmniPrompt(script, thumbnail);
       if (!promptText) throw new Error('Claude returned empty prompt');
       return res.status(200).json({ promptText });
     } catch(err) {
