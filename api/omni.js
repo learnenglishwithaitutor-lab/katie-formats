@@ -1,11 +1,11 @@
-// ── Norah hardcoded assets (set in Vercel env vars) ───────────
-// These kie.ai URLs contain the original filenames in their path
-// (luna_start_frame.png, norah_new_voice.mp4) so the image-prompt
-// hack can reference them by name.
-const NORAH_START_FRAME_URL = process.env.NORAH_START_FRAME_URL;
-const NORAH_VOICE_REF_URL   = process.env.NORAH_VOICE_REF_URL;
-const KIE_TOKEN             = process.env.KIE_API_TOKEN;
-const ANTHROPIC_KEY         = process.env.ANTHROPIC_API_KEY;
+// ── Norah assets — bundled in the repo, uploaded fresh per generation ──
+// kie.ai's tempfile URLs expire, so we re-upload every time to avoid
+// stale-URL "image fetch failed" errors.
+import { readFile } from 'fs/promises';
+import path from 'path';
+
+const KIE_TOKEN     = process.env.KIE_API_TOKEN;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
 const KIE_UPLOAD_URL = 'https://kieai.redpandaai.co/api/file-stream-upload';
 const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
@@ -57,13 +57,13 @@ Rules:
   return data.content?.[0]?.text || '';
 }
 
-// ── Upload a base64 PNG to kie.ai, return hosted URL ──────────
-async function uploadPromptPng(base64Data) {
-  // base64Data is the raw base64 (no data: prefix)
-  const buffer = Buffer.from(base64Data, 'base64');
+// ── Upload a buffer to kie.ai, return hosted URL ──────────────
+// filename is preserved in the upload path so the image-prompt hack
+// can reference files by name (prompt.png, luna_start_frame.png, etc).
+async function uploadToKie(buffer, mimeType, filename) {
   const form = new FormData();
-  form.append('file', new Blob([buffer], { type: 'image/png' }), 'prompt.png');
-  form.append('uploadPath', 'katie/prompt.png');
+  form.append('file', new Blob([buffer], { type: mimeType }), filename);
+  form.append('uploadPath', `katie/${filename}`);
 
   const res = await fetch(KIE_UPLOAD_URL, {
     method: 'POST',
@@ -72,26 +72,32 @@ async function uploadPromptPng(base64Data) {
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`kie.ai upload failed (${res.status}): ${t}`);
+    throw new Error(`kie.ai upload failed (${res.status}) for ${filename}: ${t}`);
   }
   const data = await res.json();
   const url = data?.data?.downloadUrl;
-  if (!url) throw new Error(`kie.ai upload: no downloadUrl. Response: ${JSON.stringify(data)}`);
+  if (!url) throw new Error(`kie.ai upload: no downloadUrl for ${filename}. Response: ${JSON.stringify(data)}`);
   return url;
 }
 
+// ── Read a bundled Norah asset from the repo ──────────────────
+async function readAsset(filename) {
+  const p = path.join(process.cwd(), filename);
+  return readFile(p);
+}
+
 // ── Submit generation task (image-prompt hack) ────────────────
-async function submitKieTask(promptPngUrl, noVoice) {
+async function submitKieTask(promptPngUrl, startFrameUrl, voiceUrl, noVoice) {
   const input = {
     // The real prompt lives in the PNG. This text just points Omni to it.
     prompt: 'Read prompt.png. Use luna_start_frame.png as the starting image for norah_new_voice.mp4',
     // Prompt PNG first, Norah start frame second
-    image_urls: [promptPngUrl, NORAH_START_FRAME_URL],
+    image_urls: [promptPngUrl, startFrameUrl],
     duration: '8',
     aspect_ratio: '9:16'
   };
-  if (!noVoice) {
-    input.video_list = [{ url: NORAH_VOICE_REF_URL, start: 0, ends: 10 }];
+  if (!noVoice && voiceUrl) {
+    input.video_list = [{ url: voiceUrl, start: 0, ends: 10 }];
   }
   const body = { model: 'gemini-omni-video', input };
   const res = await fetch(KIE_CREATE_URL, {
@@ -181,18 +187,33 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── action=generate: upload the rendered PNG + submit task ──
+  // ── action=generate: upload prompt PNG + Norah assets fresh, submit ──
   if (action === 'generate') {
     const promptPng = body.promptPng; // base64 (no data: prefix)
     const noVoice = body.noVoice === true;
     if (!promptPng) return res.status(400).json({ error: 'promptPng required' });
-    if (!NORAH_START_FRAME_URL) return res.status(500).json({ error: 'NORAH_START_FRAME_URL not set' });
-    if (!noVoice && !NORAH_VOICE_REF_URL) return res.status(500).json({ error: 'NORAH_VOICE_REF_URL not set' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
-      const promptPngUrl = await uploadPromptPng(promptPng);
-      const taskId = await submitKieTask(promptPngUrl, noVoice);
-      return res.status(200).json({ taskId, promptPngUrl });
+      // Upload all assets fresh so no kie.ai tempfile URL is ever stale
+      const promptBuffer = Buffer.from(promptPng, 'base64');
+      const [startBuffer, voiceBuffer] = await Promise.all([
+        readAsset('luna_start_frame.png'),
+        noVoice ? Promise.resolve(null) : readAsset('norah_new_voice.mp4')
+      ]);
+
+      const uploads = [
+        uploadToKie(promptBuffer, 'image/png', 'prompt.png'),
+        uploadToKie(startBuffer, 'image/png', 'luna_start_frame.png')
+      ];
+      if (!noVoice) uploads.push(uploadToKie(voiceBuffer, 'video/mp4', 'norah_new_voice.mp4'));
+
+      const urls = await Promise.all(uploads);
+      const promptPngUrl  = urls[0];
+      const startFrameUrl = urls[1];
+      const voiceUrl      = noVoice ? null : urls[2];
+
+      const taskId = await submitKieTask(promptPngUrl, startFrameUrl, voiceUrl, noVoice);
+      return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
     }
