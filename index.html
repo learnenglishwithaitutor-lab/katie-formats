@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v30 -->
+  <!-- BUST-v31 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v30';
+const APP_VERSION = 'v31';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1104,12 +1104,13 @@ async function triggerRefresh() {
     if (lastLabel) lastLabel.textContent = 'Loading videos...';
     const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
-    if (!resultsData.videos || resultsData.videos.length === 0) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; if (lastLabel) lastLabel.textContent = 'No new posts in last 5 days'; return; }
+    if (!resultsData.videos || resultsData.videos.length === 0) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; if (lastLabel) lastLabel.textContent = 'No videos found'; return; }
     formats = resultsData.videos.map(v => ({
       title: v.title || 'No caption',
       views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
       comments: v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
-      url: v.url, thumbnail: v.thumbnail, author: v.author, created: v.created
+      url: v.url, thumbnail: v.thumbnail, author: v.author, created: v.created,
+      videoFile: v.videoFile || ''
     }));
     saveCache(formats);
     showCardUI(localStorage.getItem('kf_pulled'));
