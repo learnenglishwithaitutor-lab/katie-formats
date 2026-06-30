@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v27 -->
+  <!-- BUST-v28 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,6 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
+const APP_VERSION = 'v28';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -577,7 +578,7 @@ function showStage2Done() {
         <div class="approved-list">
           ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">${s.script.slice(0,50)}...</span></div>`).join('')}
         </div>
-        <button class="btn-primary" onclick="generateVideos()" id="generate-btn">Generate videos →</button>
+        <button class="btn-primary" onclick="safeGenerate()" id="generate-btn">Generate videos →</button>
       ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No scripts approved.</p>'}
       <button class="btn-secondary" onclick="reviewScriptsAgain()">Review again</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
@@ -664,6 +665,17 @@ function splitScriptIntoClips(script, numClips) {
     parts.push(units.slice(i*perClip, (i+1)*perClip).join('').trim());
   }
   return parts.filter(p => p.trim());
+}
+
+async function safeGenerate() {
+  const btn = document.getElementById('generate-btn');
+  if (btn) { btn.textContent = 'Starting…'; }
+  try {
+    await generateVideos();
+  } catch (e) {
+    alert('Generate failed: ' + (e && e.message ? e.message : e));
+    if (btn) { btn.textContent = 'Generate videos →'; }
+  }
 }
 
 async function generateVideos() {
@@ -1248,6 +1260,7 @@ function showHome() {
 
     <div style="text-align:center;margin-top:24px;">
       <button onclick="resetAppData()" style="background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit;">Reset app data</button>
+      <div style="color:var(--muted);font-size:11px;margin-top:8px;opacity:0.6;">${APP_VERSION}</div>
     </div>`;
 }
 
