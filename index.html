@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v21 -->
+  <!-- BUST-v22 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -673,21 +673,36 @@ async function generateVideos() {
       const s = approvedScripts[i];
       const scriptText = s.script || s.text || s.katie_script || '';
 
-      // 1a. Ask Claude for the Omni prompt text
+      // 1a. If we have the source video, get the REAL motion breakdown from the decode service
+      let motionBreakdown = null;
+      if (s.format?.videoFile) {
+        setStatus(`Watching video ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+        try {
+          const ar = await fetch('/api/omni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'analyze', videoFile: s.format.videoFile, script: scriptText })
+          });
+          const ad = await ar.json();
+          if (ar.ok && ad.motionBreakdown) motionBreakdown = ad.motionBreakdown;
+        } catch (e) { /* fall back to thumbnail grounding */ }
+      }
+
+      // 1b. Ask Claude for the Omni prompt text (uses real breakdown if available)
       setStatus(`Writing prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
       const pr = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'prompt', script: scriptText, thumbnail: s.format?.thumbnail || null })
+        body: JSON.stringify({ action: 'prompt', script: scriptText, thumbnail: s.format?.thumbnail || null, motionBreakdown })
       });
       const pd = await pr.json();
       if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
 
-      // 1b. Render the prompt text to a PNG (image-prompt hack)
+      // 1c. Render the prompt text to a PNG (image-prompt hack)
       setStatus(`Rendering prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
       const promptPng = renderPromptToPng(pd.promptText);
 
-      // 1c. Submit: upload PNG + create task
+      // 1d. Submit: upload PNG + create task
       setStatus(`Submitting ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
       const res = await fetch('/api/omni', {
         method: 'POST',

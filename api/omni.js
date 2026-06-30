@@ -16,7 +16,49 @@ const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
 const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
-async function generateOmniPrompt(script, thumbnailUrl) {
+async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown) {
+  // If we have a real motion breakdown from the decode service (derived from
+  // watching the actual video frames), use it directly. Otherwise fall back to
+  // thumbnail-grounded guessing.
+  if (motionBreakdown && motionBreakdown.trim()) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: `You assemble a Gemini Omni (Google Flow) video prompt. You are given a Katie AI script AND a real movement breakdown derived from watching the original video frame-by-frame. Output the complete Omni prompt in this exact block structure:
+
+Generate a video of this girl saying the following, clearly and naturally:
+"[script word-by-word with delivery notes in parentheses, e.g. (enthusiastically), (slower), (smiling)]"
+
+Use the video attached as reference for her voice (norah_new_voice.mp4). Make sure she is naturally expressive when she is speaking.
+
+Movement:
+[USE THE PROVIDED MOVEMENT BREAKDOWN — these are the real gestures from the source video, adapted to Norah talking to camera. Do not invent different gestures.]
+
+Setting: Home bedroom background, casual and warm, naturally expressive.
+Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.
+
+Rules:
+- Output ONLY the prompt text — no labels, no preamble
+- Keep script under 28 words for 10 seconds; truncate at a sentence boundary if longer
+- The Movement section MUST use the provided breakdown — that's the whole point
+- The setting stays Norah's bedroom — never transplant the original's location
+- Always name the voice file as norah_new_voice.mp4
+- Do NOT use detachable props
+- CAPS for emphasis words only, sparingly`,
+        messages: [{
+          role: 'user',
+          content: `Script:\n${script}\n\nReal movement breakdown (from watching the original video):\n${motionBreakdown}\n\nAssemble the full Omni prompt using this exact movement.`
+        }]
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(`Claude: ${data.error.message || JSON.stringify(data.error)}`);
+    return data.content?.[0]?.text || '';
+  }
+
   // Try to fetch the original's thumbnail so Claude can ground the
   // movement breakdown in what the creator is actually doing.
   // Falls back to text-only if the fetch fails (never breaks the pipeline).
@@ -238,10 +280,11 @@ export default async function handler(req, res) {
   if (action === 'prompt') {
     const script = body.script;
     const thumbnail = body.thumbnail || null;
+    const motionBreakdown = body.motionBreakdown || null;
     if (!script) return res.status(400).json({ error: 'script required' });
     if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
     try {
-      const promptText = await generateOmniPrompt(script, thumbnail);
+      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown);
       if (!promptText) throw new Error('Claude returned empty prompt');
       return res.status(200).json({ promptText });
     } catch(err) {

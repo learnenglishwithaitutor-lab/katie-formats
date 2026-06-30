@@ -31,8 +31,8 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             profiles,
-            resultsPerPage: downloadVideos ? 3 : 30,
-            shouldDownloadVideos: downloadVideos,
+            resultsPerPage: 12,
+            shouldDownloadVideos: true,
             shouldDownloadCovers: false
           })
         }
@@ -79,6 +79,7 @@ export default async function handler(req, res) {
         views:     item.playCount || 0,
         comments:  item.commentCount || 0,
         url:       item.webVideoUrl || `https://www.tiktok.com/@${item.authorMeta?.name}/video/${item.id}`,
+        videoFile: (Array.isArray(item.mediaUrls) && item.mediaUrls[0]) || '',
         thumbnail: item.videoMeta?.coverUrl || item.covers?.default || '',
         author:    item.authorMeta?.name || '',
         created:   item.createTimeISO
