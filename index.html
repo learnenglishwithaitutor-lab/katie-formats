@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v23 -->
+  <!-- BUST-v24 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -646,6 +646,28 @@ function renderPromptToPng(promptText) {
   return canvas.toDataURL('image/png').split(',')[1];
 }
 
+// Split a script into N clips as evenly as possible, snapping to sentence/word breaks
+function splitScriptIntoClips(script, numClips) {
+  if (numClips <= 1) return [script];
+  // Break into sentence-ish units (keep the delimiter)
+  const units = script.match(/[^.!?]+[.!?]*\s*/g) || [script];
+  // If too few sentences to split, fall back to word chunks
+  if (units.length < numClips) {
+    const words = script.trim().split(/\s+/);
+    const per = Math.ceil(words.length / numClips);
+    const parts = [];
+    for (let i = 0; i < numClips; i++) parts.push(words.slice(i*per, (i+1)*per).join(' '));
+    return parts.filter(p => p.trim());
+  }
+  // Distribute sentences across clips as evenly as possible
+  const perClip = Math.ceil(units.length / numClips);
+  const parts = [];
+  for (let i = 0; i < numClips; i++) {
+    parts.push(units.slice(i*perClip, (i+1)*perClip).join('').trim());
+  }
+  return parts.filter(p => p.trim());
+}
+
 async function generateVideos() {
   const cachedVids = loadGeneratedVideos();
   if (cachedVids && cachedVids.length > 0) { generatedVideos = cachedVids; showStage3Done(); return; }
@@ -667,15 +689,16 @@ async function generateVideos() {
   };
 
   try {
-    // PHASE 1: For each script — watch video + build the Omni prompt (no generation yet)
+    // PHASE 1: For each script — watch video, decide clip count, build one prompt per clip
     const prepared = [];
     for (let i = 0; i < approvedScripts.length; i++) {
       const s = approvedScripts[i];
       const scriptText = s.script || s.text || s.katie_script || '';
 
-      // 1a. If we have the source video, get the REAL motion breakdown from the decode service
+      // 1a. If we have the source video, get the REAL motion breakdown + duration
       let motionBreakdown = null;
       let usedRealAnalysis = false;
+      let duration = 0;
       if (s.format?.videoFile) {
         setStatus(`Watching video ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
         try {
@@ -685,21 +708,38 @@ async function generateVideos() {
             body: JSON.stringify({ action: 'analyze', videoFile: s.format.videoFile, script: scriptText })
           });
           const ad = await ar.json();
-          if (ar.ok && ad.motionBreakdown) { motionBreakdown = ad.motionBreakdown; usedRealAnalysis = true; }
+          if (ar.ok && ad.motionBreakdown) { motionBreakdown = ad.motionBreakdown; usedRealAnalysis = true; duration = ad.duration || 0; }
         } catch (e) { /* fall back to thumbnail grounding */ }
       }
 
-      // 1b. Ask Claude for the Omni prompt text (uses real breakdown if available)
-      setStatus(`Writing prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
-      const pr = await fetch('/api/omni', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'prompt', script: scriptText, thumbnail: s.format?.thumbnail || null, motionBreakdown })
-      });
-      const pd = await pr.json();
-      if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
+      // 1b. Decide clip count: <=10s → 1, 10-25s → 2, >25s → 3
+      const numClips = duration > 25 ? 3 : (duration > 10 ? 2 : 1);
+      const scriptParts = splitScriptIntoClips(scriptText, numClips);
 
-      prepared.push({ scriptObj: s, promptText: pd.promptText, usedRealAnalysis });
+      // 1c. Build one Omni prompt per clip
+      for (let c = 0; c < scriptParts.length; c++) {
+        setStatus(`Writing prompt ${i+1}.${c+1} (clip ${c+1}/${numClips})...`, '@' + s.format.author);
+        const pr = await fetch('/api/omni', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'prompt',
+            script: scriptParts[c],
+            thumbnail: s.format?.thumbnail || null,
+            motionBreakdown,
+            clipInfo: numClips > 1 ? { index: c+1, total: numClips } : null
+          })
+        });
+        const pd = await pr.json();
+        if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
+        prepared.push({
+          scriptObj: s,
+          promptText: pd.promptText,
+          usedRealAnalysis,
+          clipLabel: numClips > 1 ? `Clip ${c+1} of ${numClips}` : null,
+          videoIndex: i
+        });
+      }
     }
 
     // Hand off to the review screen — generation happens only after approval
@@ -736,7 +776,7 @@ function showPromptReview(prepared) {
         ${prepared.map((p, i) => `
           <div style="border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;${approved.has(i)?'':'opacity:0.45;'}">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span style="font-size:13px;font-weight:600;">@${p.scriptObj.format.author}</span>
+              <span style="font-size:13px;font-weight:600;">@${p.scriptObj.format.author}${p.clipLabel ? ` · <span style="color:var(--accent,#6C5CE7);">${p.clipLabel}</span>` : ''}</span>
               <span style="font-size:11px;padding:2px 8px;border-radius:20px;${p.usedRealAnalysis?'background:#E6F7EF;color:#1D9E75;':'background:#FFF3E0;color:#C77700;'}">
                 ${p.usedRealAnalysis ? '✓ Real motion analysis' : '⚠ Thumbnail fallback'}
               </span>

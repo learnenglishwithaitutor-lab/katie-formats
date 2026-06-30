@@ -16,7 +16,10 @@ const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
 const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
-async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown) {
+async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown, clipInfo) {
+  const clipNote = clipInfo
+    ? `\n\nNOTE: This is clip ${clipInfo.index} of ${clipInfo.total} of a longer video, stitched later. Generate ONLY this segment's words at a natural, unhurried pace. Use the part of the movement breakdown matching these words. Keep Norah in the same bedroom and similar energy across clips for continuity.`
+    : '';
   // If we have a real motion breakdown from the decode service (derived from
   // watching the actual video frames), use it directly. Otherwise fall back to
   // thumbnail-grounded guessing.
@@ -50,7 +53,7 @@ Rules:
 - CAPS for emphasis words only, sparingly`,
         messages: [{
           role: 'user',
-          content: `Script:\n${script}\n\nReal movement breakdown (from watching the original video):\n${motionBreakdown}\n\nAssemble the full Omni prompt using this exact movement.`
+          content: `Script:\n${script}\n\nReal movement breakdown (from watching the original video):\n${motionBreakdown}\n\nAssemble the full Omni prompt using this exact movement.${clipNote}`
         }]
       })
     });
@@ -270,7 +273,7 @@ export default async function handler(req, res) {
       if (!dres.ok || !ddata.ok) {
         return res.status(502).json({ error: 'decode service: ' + (ddata.error || dres.status) });
       }
-      return res.status(200).json({ motionBreakdown: ddata.movementBreakdown, frameCount: ddata.frameCount });
+      return res.status(200).json({ motionBreakdown: ddata.movementBreakdown, frameCount: ddata.frameCount, duration: ddata.duration || 0 });
     } catch (err) {
       return res.status(500).json({ error: 'decode call failed: ' + err.message });
     }
@@ -281,10 +284,11 @@ export default async function handler(req, res) {
     const script = body.script;
     const thumbnail = body.thumbnail || null;
     const motionBreakdown = body.motionBreakdown || null;
+    const clipInfo = body.clipInfo || null;
     if (!script) return res.status(400).json({ error: 'script required' });
     if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
     try {
-      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown);
+      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown, clipInfo);
       if (!promptText) throw new Error('Claude returned empty prompt');
       return res.status(200).json({ promptText });
     } catch(err) {
