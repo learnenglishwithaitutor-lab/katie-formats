@@ -41,7 +41,7 @@ Movement:
 [USE THE PROVIDED MOVEMENT BREAKDOWN — these are the real gestures from the source video, adapted to Norah talking to camera. Do not invent different gestures. Write each gesture ANCHORED TO THE WORD it lands on, e.g. At "Absolutely," right index finger points up. At "Certainly," open palm sweeps inward. NEVER use timestamps like 0:00-0:03 — anchor to words only.]
 
 Setting: Same cozy home bedroom — plain warm-white wall behind her, soft natural daylight from the side, a couple of small framed pictures, waist-up framing with the camera at eye level. Warm, upbeat, friendly UGC energy throughout.
-Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.
+Format: Vertical 9:16, authentic phone-camera look. Absolutely NO text, NO captions, NO subtitles, NO words or letters anywhere on screen — a completely clean video frame with zero overlaid graphics or text of any kind.
 
 Rules:
 - Output ONLY the prompt text — no labels, no preamble
@@ -49,6 +49,7 @@ Rules:
 - The Movement section MUST use the provided breakdown — that's the whole point
 - Movement MUST be word-anchored (At "word," gesture). NEVER emit timestamps (no 0:00-0:03). Timestamps are forbidden because each clip is a fresh ~10s generation and fabricated times cause rushing.
 - COPY THE SETTING LINE EXACTLY AS GIVEN ABOVE, word for word, every time — do not paraphrase or vary it. Identical setting + framing + energy across clips is what lets them stitch seamlessly.
+- COPY THE FORMAT LINE (including the NO-text instruction) EXACTLY AS GIVEN — the clean no-caption frame must be requested identically every clip.
 - Keep the SAME baseline energy (warm, upbeat, expressive) in every clip; only the per-word delivery notes should vary with the words' meaning (e.g. confident vs skeptical). Do not let the overall mood drop between clips.
 - Always name the voice file as norah_new_voice.mp4
 - Do NOT use detachable props

@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v31 -->
+  <!-- BUST-v32 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -868,7 +868,7 @@ async function generateApprovedPrompts() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
-      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, status: 'processing', video_url: null });
+      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, status: 'processing', video_url: null });
     }
     generatedVideos = results;
     await pollGeneratedVideos(setStatus);
@@ -930,10 +930,10 @@ function showStage3Done() {
         ${failed.length > 0 ? `<span class="pill r">${failed.length} failed</span>` : ''}
       </div>
       <div class="video-results">
-        ${generatedVideos.map(v => `
+        ${generatedVideos.map((v, idx) => `
           <div class="video-result">
             <div class="video-result-head">
-              <span class="t">@${v.scriptObj?.format?.author || 'unknown'}</span>
+              <span class="t">@${v.scriptObj?.format?.author || 'unknown'}${v.clipLabel ? ` · ${v.clipLabel}` : ''}</span>
               ${v.video_url
                 ? `<a href="${v.video_url}" target="_blank" download style="font-size:11px;color:#1D9E75;font-weight:600;text-decoration:none;white-space:nowrap;">Download ↓</a>`
                 : `<span style="font-size:11px;color:var(--reject);" title="${v.failMsg || ''}">Failed</span>`}
@@ -941,9 +941,10 @@ function showStage3Done() {
             ${v.video_url
               ? `<video src="${v.video_url}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;background:#000;margin-top:8px;max-height:70vh;"></video>`
               : `<div style="font-size:12px;color:var(--reject);margin-top:6px;">${v.failMsg || 'Generation failed'}</div>`}
+            <button class="btn-secondary" onclick="regenerateOne(${idx})" style="margin-top:8px;font-size:13px;padding:10px;">↻ Regenerate this clip</button>
           </div>`).join('')}
       </div>
-      <button class="btn-secondary" onclick="regenerateVideos()">Regenerate</button>
+      <button class="btn-secondary" onclick="regenerateVideos()">Regenerate all</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
 }
@@ -952,6 +953,40 @@ function regenerateVideos() {
   generatedVideos = [];
   ['kf_generated_videos','kf_generated_videos_date'].forEach(k=>localStorage.removeItem(k));
   generateVideos();
+}
+
+// Regenerate a SINGLE clip by index, reusing its stored prompt
+async function regenerateOne(idx) {
+  const item = generatedVideos[idx];
+  if (!item || !item.promptText) { alert('No stored prompt for this clip.'); return; }
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null, true, 'Generate videos')}
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-title" id="loading-title">Regenerating clip...</div>
+      <div class="loading-sub" id="loading-sub">@${item.scriptObj?.format?.author || ''}</div>
+    </div>`;
+  const setStatus = (t, s='') => {
+    const a=document.getElementById('loading-title'), b=document.getElementById('loading-sub');
+    if(a)a.textContent=t; if(b)b.textContent=s;
+  };
+  try {
+    const promptPng = renderPromptToPng(item.promptText);
+    setStatus('Submitting...', '@' + (item.scriptObj?.format?.author || ''));
+    const res = await fetch('/api/omni', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'generate', promptPng })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || 'failed'}`);
+    // Reset just this item and poll all (only this one is processing)
+    item.taskId = data.taskId; item.status = 'processing'; item.video_url = null; item.failMsg = null;
+    await pollGeneratedVideos(setStatus);
+  } catch (err) {
+    alert('Regenerate failed: ' + err.message);
+    showStage3Done();
+  }
 }
 // ── Send to Sheet ──────────────────────────────────────────────
 // Send approved batch to the Queue tab → the Mac (Dispatch) picks it up
