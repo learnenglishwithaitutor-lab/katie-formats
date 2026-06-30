@@ -1245,7 +1245,20 @@ function showHome() {
         <div class="stage-arrow">›</div>
       </div>
 
+    </div>
+
+    <div style="text-align:center;margin-top:24px;">
+      <button onclick="resetAppData()" style="background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit;">Reset app data</button>
     </div>`;
+}
+
+function resetAppData() {
+  if (!confirm('Clear all approved formats, scripts, and generated videos? (Your tracked accounts stay.) This fixes a stuck state.')) return;
+  ['kf_approved_formats','kf_approved_formats_date','kf_approved_scripts','kf_approved_scripts_date','kf_generated_scripts','kf_generated_scripts_date','kf_generated_videos','kf_generated_videos_date'].forEach(k=>localStorage.removeItem(k));
+  approved.length = 0; rejected.length = 0;
+  approvedScripts.length = 0; rejectedScripts.length = 0;
+  scripts = []; generatedVideos = [];
+  showHome();
 }
 
 function startStage1() {
