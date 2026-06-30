@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v20 -->
+  <!-- BUST-v21 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -577,7 +577,8 @@ function showStage2Done() {
         <div class="approved-list">
           ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">${s.script.slice(0,50)}...</span></div>`).join('')}
         </div>
-        <button class="btn-primary" onclick="generateVideos()">Continue to videos →</button>
+        <button class="btn-primary" onclick="sendToQueue()" id="queue-btn">Send to Mac for analysis →</button>
+        <button class="btn-secondary" onclick="generateVideos()">Generate now (skip analysis)</button>
         <button class="btn-secondary" id="send-btn" onclick="sendToSheet()" style="border-color:var(--approve);color:var(--approve);">Send scripts to Sheet only</button>
       ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No scripts approved.</p>'}
       <button class="btn-secondary" onclick="reviewScriptsAgain()">Review again</button>
@@ -789,6 +790,33 @@ function regenerateVideos() {
   generateVideos();
 }
 // ── Send to Sheet ──────────────────────────────────────────────
+// Send approved batch to the Queue tab → the Mac (Dispatch) picks it up
+async function sendToQueue() {
+  const btn = document.getElementById('queue-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending to Mac...'; }
+  try {
+    const items = approvedScripts.map(s => ({
+      videoUrl: s.format.url,
+      author: s.format.author,
+      script: s.script
+    }));
+    const res = await fetch('/api/sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'queue', items })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (btn) { btn.textContent = `✓ Queued ${data.queued} for the Mac`; }
+    } else {
+      throw new Error(data.error || 'Unknown error');
+    }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry → send to Mac'; }
+    alert('Error queuing: ' + err.message);
+  }
+}
+
 async function sendToSheet() {
   const btn = document.getElementById('send-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
