@@ -16,9 +16,9 @@ const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
 const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
-async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown, clipInfo) {
-  const clipNote = clipInfo
-    ? `\n\nNOTE: This is clip ${clipInfo.index} of ${clipInfo.total} of a longer video. Keep the same room, framing, and warm upbeat energy as the other clips so they stitch together. Generate ONLY this segment's words at a natural, unhurried pace.`
+async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown, trimToTenSec) {
+  const clipNote = trimToTenSec
+    ? `\n\nIMPORTANT: This script is too long for a single 10-second video. TRIM it to the strongest, most representative ~22-25 words (about 10 seconds) that still tell the whole story. For a descending list (e.g. certainty adverbs), keep a clear arc from top to bottom by selecting ~6 well-spaced items rather than all of them, and ALWAYS keep the final call-to-action line if present. Use only the movement beats matching the words you keep.`
     : '';
   // If we have a real motion breakdown from the decode service (derived from
   // watching the actual video frames), use it directly. Otherwise fall back to
@@ -285,11 +285,11 @@ export default async function handler(req, res) {
     const script = body.script;
     const thumbnail = body.thumbnail || null;
     const motionBreakdown = body.motionBreakdown || null;
-    const clipInfo = body.clipInfo || null;
+    const trimToTenSec = body.trimToTenSec || false;
     if (!script) return res.status(400).json({ error: 'script required' });
     if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
     try {
-      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown, clipInfo);
+      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown, trimToTenSec);
       if (!promptText) throw new Error('Claude returned empty prompt');
       return res.status(200).json({ promptText });
     } catch(err) {
