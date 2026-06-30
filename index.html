@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v22 -->
+  <!-- BUST-v23 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -667,14 +667,15 @@ async function generateVideos() {
   };
 
   try {
-    // Step 1: For each script — get prompt text, render to PNG, submit
-    const results = [];
+    // PHASE 1: For each script — watch video + build the Omni prompt (no generation yet)
+    const prepared = [];
     for (let i = 0; i < approvedScripts.length; i++) {
       const s = approvedScripts[i];
       const scriptText = s.script || s.text || s.katie_script || '';
 
       // 1a. If we have the source video, get the REAL motion breakdown from the decode service
       let motionBreakdown = null;
+      let usedRealAnalysis = false;
       if (s.format?.videoFile) {
         setStatus(`Watching video ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
         try {
@@ -684,7 +685,7 @@ async function generateVideos() {
             body: JSON.stringify({ action: 'analyze', videoFile: s.format.videoFile, script: scriptText })
           });
           const ad = await ar.json();
-          if (ar.ok && ad.motionBreakdown) motionBreakdown = ad.motionBreakdown;
+          if (ar.ok && ad.motionBreakdown) { motionBreakdown = ad.motionBreakdown; usedRealAnalysis = true; }
         } catch (e) { /* fall back to thumbnail grounding */ }
       }
 
@@ -698,12 +699,97 @@ async function generateVideos() {
       const pd = await pr.json();
       if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
 
-      // 1c. Render the prompt text to a PNG (image-prompt hack)
-      setStatus(`Rendering prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
-      const promptPng = renderPromptToPng(pd.promptText);
+      prepared.push({ scriptObj: s, promptText: pd.promptText, usedRealAnalysis });
+    }
 
-      // 1d. Submit: upload PNG + create task
-      setStatus(`Submitting ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+    // Hand off to the review screen — generation happens only after approval
+    window.__preparedPrompts = prepared;
+    showPromptReview(prepared);
+    return;
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(localStorage.getItem('kf_pulled'), null, true, 'Generate videos')}
+      <div class="loading-screen">
+        <div style="font-size:40px;margin-bottom:16px;">⚠️</div>
+        <div style="font-weight:600;margin-bottom:8px;">Something went wrong</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:24px;max-width:300px;text-align:center;">${err.message}</div>
+        <button class="btn-secondary" onclick="generateVideos()">Try again</button>
+        <button class="btn-secondary" onclick="showHome()">← Home</button>
+      </div>`;
+    return;
+  }
+}
+
+// Review screen: show each assembled prompt read-only with Approve/Skip
+function showPromptReview(prepared) {
+  const approved = new Set(prepared.map((_, i) => i)); // all approved by default
+  window.__promptApproved = approved;
+  const pulled = localStorage.getItem('kf_pulled');
+
+  const render = () => {
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(pulled, null, true, 'Review prompts')}
+      <div style="padding:16px 14px 100px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+          Review each Omni prompt before generating. Only approved ones will be sent (each costs a generation).
+        </div>
+        ${prepared.map((p, i) => `
+          <div style="border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;${approved.has(i)?'':'opacity:0.45;'}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-size:13px;font-weight:600;">@${p.scriptObj.format.author}</span>
+              <span style="font-size:11px;padding:2px 8px;border-radius:20px;${p.usedRealAnalysis?'background:#E6F7EF;color:#1D9E75;':'background:#FFF3E0;color:#C77700;'}">
+                ${p.usedRealAnalysis ? '✓ Real motion analysis' : '⚠ Thumbnail fallback'}
+              </span>
+            </div>
+            <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;max-height:240px;overflow-y:auto;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
+            <button onclick="togglePromptApprove(${i})" class="btn-secondary" style="${approved.has(i)?'border-color:var(--approve);color:var(--approve);':'border-color:var(--reject);color:var(--reject);'}">
+              ${approved.has(i) ? '✓ Will generate — tap to skip' : '✕ Skipped — tap to include'}
+            </button>
+          </div>`).join('')}
+        <button class="btn-primary" onclick="generateApprovedPrompts()" style="margin-top:8px;">
+          Generate approved (${approved.size}) →
+        </button>
+        <button class="btn-secondary" onclick="showHome()">← Home</button>
+      </div>`;
+  };
+  window.__renderPromptReview = render;
+  render();
+}
+
+function togglePromptApprove(i) {
+  const set = window.__promptApproved;
+  if (set.has(i)) set.delete(i); else set.add(i);
+  window.__renderPromptReview();
+}
+
+// Generate only the approved prepared prompts
+async function generateApprovedPrompts() {
+  const prepared = window.__preparedPrompts || [];
+  const approvedIdx = [...(window.__promptApproved || [])].sort((a,b)=>a-b);
+  if (!approvedIdx.length) { alert('Approve at least one prompt to generate.'); return; }
+  const toGen = approvedIdx.map(i => prepared[i]);
+
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null, true, 'Generate videos')}
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <div id="gen-status" style="font-weight:600;margin-top:16px;">Starting...</div>
+      <div id="gen-sub" style="color:var(--muted);font-size:13px;margin-top:4px;"></div>
+    </div>`;
+  const setStatus = (m, sub='') => {
+    const a=document.getElementById('gen-status'), b=document.getElementById('gen-sub');
+    if(a)a.textContent=m; if(b)b.textContent=sub;
+  };
+
+  try {
+    const results = [];
+    for (let i = 0; i < toGen.length; i++) {
+      const p = toGen[i];
+      setStatus(`Rendering ${i+1} of ${toGen.length}...`, '@' + p.scriptObj.format.author);
+      const promptPng = renderPromptToPng(p.promptText);
+
+      setStatus(`Submitting ${i+1} of ${toGen.length}...`, '@' + p.scriptObj.format.author);
       const res = await fetch('/api/omni', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -711,59 +797,51 @@ async function generateVideos() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
-      results.push({
-        taskId: data.taskId,
-        promptText: pd.promptText,
-        scriptObj: s,
-        status: 'processing',
-        video_url: null
-      });
+      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, status: 'processing', video_url: null });
     }
-
-    // Step 2: Poll until all complete (10s intervals, up to 60 attempts = 10 min)
-    let attempts = 0;
-    while (attempts < 60) {
-      await new Promise(r => setTimeout(r, 10000));
-      attempts++;
-      const pending = results.filter(r => r.status === 'processing');
-      const done = results.length - pending.length;
-      setStatus(`Generating... (${attempts * 10}s elapsed)`, `${done} / ${results.length} complete`);
-      for (const item of pending) {
-        try {
-          const sr = await fetch(`/api/omni?action=status&taskId=${item.taskId}`);
-          const sd = await sr.json();
-          if (sd.status === 'success' && sd.videoUrl) {
-            item.status = 'completed';
-            item.video_url = sd.videoUrl;
-          } else if (sd.status === 'fail') {
-            item.status = 'failed';
-            item.failMsg = sd.failMsg || 'Generation failed';
-          }
-          // waiting/queuing/generating/processing → leave as 'processing'
-        } catch(e) { /* keep polling */ }
-      }
-      if (results.every(r => r.status !== 'processing')) break;
-    }
-
-    // Anything still processing after timeout → mark failed
-    results.forEach(r => { if (r.status === 'processing') r.status = 'failed'; });
-
     generatedVideos = results;
-    saveGeneratedVideos(results);
-    showStage3Done();
-
+    await pollGeneratedVideos(setStatus);
   } catch (err) {
-    console.error(err);
     document.getElementById('app').innerHTML = `
-      ${headerHTML(null, null, true, 'Generate videos')}
-      <div class="done">
-        <div class="check">⚠️</div>
-        <h2>Something went wrong</h2>
-        <p style="color:var(--reject)">${err.message}</p>
-        <button class="btn-primary" onclick="generateVideos()">Try again</button>
-        <button class="btn-secondary" onclick="showStage2Done()">Back</button>
+      ${headerHTML(pulled, null, true, 'Generate videos')}
+      <div class="loading-screen">
+        <div style="font-size:40px;margin-bottom:16px;">⚠️</div>
+        <div style="font-weight:600;margin-bottom:8px;">Something went wrong</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:24px;max-width:300px;text-align:center;">${err.message}</div>
+        <button class="btn-secondary" onclick="showPromptReview(window.__preparedPrompts)">← Back to review</button>
       </div>`;
   }
+}
+
+// Poll all generatedVideos until complete, then show done screen
+async function pollGeneratedVideos(setStatus) {
+  const results = generatedVideos;
+  let attempts = 0;
+  while (attempts < 60) {
+    await new Promise(r => setTimeout(r, 10000));
+    attempts++;
+    const pending = results.filter(r => r.status === 'processing');
+    const done = results.length - pending.length;
+    setStatus(`Generating... (${attempts * 10}s elapsed)`, `${done} / ${results.length} complete`);
+    for (const item of pending) {
+      try {
+        const sr = await fetch(`/api/omni?action=status&taskId=${item.taskId}`);
+        const sd = await sr.json();
+        if (sd.status === 'success' && sd.videoUrl) {
+          item.status = 'completed';
+          item.video_url = sd.videoUrl;
+        } else if (sd.status === 'fail') {
+          item.status = 'failed';
+          item.failMsg = sd.failMsg || 'Generation failed';
+        }
+      } catch(e) { /* keep polling */ }
+    }
+    if (results.every(r => r.status !== 'processing')) break;
+  }
+  results.forEach(r => { if (r.status === 'processing') r.status = 'failed'; });
+  generatedVideos = results;
+  saveGeneratedVideos(results);
+  showStage3Done();
 }
 
 function showStage3Done() {
