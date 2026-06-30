@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v34 -->
+  <!-- BUST-v35 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v35';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -868,7 +868,7 @@ async function generateApprovedPrompts() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
-      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, status: 'processing', video_url: null });
+      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'processing', video_url: null });
     }
     generatedVideos = results;
     await pollGeneratedVideos(setStatus);
@@ -919,19 +919,26 @@ function showStage3Done() {
   const pulled = localStorage.getItem('kf_pulled');
   const completed = generatedVideos.filter(v => v.status === 'completed');
   const failed = generatedVideos.filter(v => v.status !== 'completed');
-  document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null, true, 'Generate videos')}
-    <div class="done">
-      <div class="check">🎬</div>
-      <h2>Videos ready!</h2>
-      <p>${completed.length} video${completed.length !== 1 ? 's' : ''} generated</p>
-      <div class="pills">
-        <span class="pill a">${completed.length} done</span>
-        ${failed.length > 0 ? `<span class="pill r">${failed.length} failed</span>` : ''}
-      </div>
-      <div class="video-results">
-        ${generatedVideos.map((v, idx) => `
-          <div class="video-result">
+
+  // Group clips by their source video (videoIndex) so we never mix unrelated videos
+  const groups = {};
+  generatedVideos.forEach((v, idx) => {
+    const key = (v.videoIndex !== undefined && v.videoIndex !== null) ? v.videoIndex : `solo_${idx}`;
+    (groups[key] = groups[key] || []).push({ ...v, _idx: idx });
+  });
+
+  const groupHTML = Object.values(groups).map(clips => {
+    // completed clip URLs in clip order (Clip 1, Clip 2, ...)
+    const completedClips = clips
+      .filter(c => c.status === 'completed' && c.video_url)
+      .sort((a,b) => (a.clipLabel||'').localeCompare(b.clipLabel||''));
+    const canStitch = completedClips.length >= 2;
+    const author = clips[0]?.scriptObj?.format?.author || 'unknown';
+
+    return `
+      <div style="border:0.5px solid var(--border);border-radius:14px;padding:10px;margin-bottom:14px;">
+        ${clips.map(v => `
+          <div class="video-result" style="margin-bottom:10px;">
             <div class="video-result-head">
               <span class="t">@${v.scriptObj?.format?.author || 'unknown'}${v.clipLabel ? ` · ${v.clipLabel}` : ''}</span>
               ${v.video_url
@@ -941,12 +948,73 @@ function showStage3Done() {
             ${v.video_url
               ? `<video src="${v.video_url}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;background:#000;margin-top:8px;max-height:70vh;"></video>`
               : `<div style="font-size:12px;color:var(--reject);margin-top:6px;">${v.failMsg || 'Generation failed'}</div>`}
-            <button class="btn-secondary" onclick="regenerateOne(${idx})" style="margin-top:8px;font-size:13px;padding:10px;">↻ Regenerate this clip</button>
+            <button class="btn-secondary" onclick="regenerateOne(${v._idx})" style="margin-top:8px;font-size:13px;padding:10px;">↻ Regenerate this clip</button>
           </div>`).join('')}
+        ${canStitch ? `
+          <button class="btn-primary" onclick='stitchGroup(${JSON.stringify(completedClips.map(c=>c.video_url))}, "${author}")' style="margin-top:4px;font-size:14px;">
+            🔗 Stitch ${completedClips.length} clips into one video →
+          </button>` : ''}
+      </div>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null, true, 'Generate videos')}
+    <div class="done" style="justify-content:flex-start;">
+      <div class="check">🎬</div>
+      <h2>Videos ready!</h2>
+      <p>${completed.length} clip${completed.length !== 1 ? 's' : ''} generated</p>
+      <div class="pills">
+        <span class="pill a">${completed.length} done</span>
+        ${failed.length > 0 ? `<span class="pill r">${failed.length} failed</span>` : ''}
+      </div>
+      <div class="video-results" style="width:100%;">
+        ${groupHTML}
       </div>
       <button class="btn-secondary" onclick="regenerateVideos()">Regenerate all</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
+}
+
+// Stitch a group's completed clips (ordered) into one MP4 via the decode service
+async function stitchGroup(clipUrls, author) {
+  if (!Array.isArray(clipUrls) || clipUrls.length < 2) { alert('Need at least 2 clips to stitch.'); return; }
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null, true, 'Generate videos')}
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-title">Stitching ${clipUrls.length} clips...</div>
+      <div class="loading-sub">@${author} — downloading, normalizing, joining</div>
+    </div>`;
+  try {
+    const res = await fetch('/api/omni', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'stitch', clips: clipUrls })
+    });
+    if (!res.ok) {
+      let msg = res.status;
+      try { const j = await res.json(); msg = j.error || msg; } catch {}
+      throw new Error(String(msg));
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(pulled, null, true, 'Generate videos')}
+      <div class="done" style="justify-content:flex-start;">
+        <div class="check">✅</div>
+        <h2>Stitched video ready</h2>
+        <p>@${author} · ${clipUrls.length} clips joined</p>
+        <div style="width:100%;margin:12px 0;">
+          <video src="${url}" controls playsinline style="width:100%;border-radius:12px;background:#000;max-height:70vh;"></video>
+        </div>
+        <a href="${url}" download="katie_${author}_stitched.mp4" class="btn-primary" style="text-decoration:none;display:block;text-align:center;">Download stitched video ↓</a>
+        <button class="btn-secondary" onclick="showStage3Done()">← Back to clips</button>
+      </div>`;
+  } catch (err) {
+    alert('Stitch failed: ' + err.message);
+    showStage3Done();
+  }
 }
 
 function regenerateVideos() {

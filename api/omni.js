@@ -281,6 +281,37 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=stitch: proxy to decode /stitch, stream the MP4 back ──
+  if (action === 'stitch') {
+    const clips = body.clips;
+    if (!Array.isArray(clips) || clips.length < 2) {
+      return res.status(400).json({ error: 'need at least 2 clip URLs' });
+    }
+    try {
+      const dres = await fetch(`${DECODE_URL}/stitch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(DECODE_SECRET ? { 'x-decode-secret': DECODE_SECRET } : {})
+        },
+        body: JSON.stringify({ clips })
+      });
+      if (!dres.ok) {
+        let msg = dres.status;
+        try { const j = await dres.json(); msg = j.error || msg; } catch {}
+        return res.status(502).json({ error: 'stitch failed: ' + msg });
+      }
+      const arrayBuf = await dres.arrayBuffer();
+      const buf = Buffer.from(arrayBuf);
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Disposition', 'attachment; filename="stitched.mp4"');
+      res.setHeader('Content-Length', buf.length);
+      return res.status(200).send(buf);
+    } catch (err) {
+      return res.status(500).json({ error: 'stitch call failed: ' + err.message });
+    }
+  }
+
   // ── action=prompt: Claude generates the prompt text (for the PNG) ──
   if (action === 'prompt') {
     const script = body.script;
