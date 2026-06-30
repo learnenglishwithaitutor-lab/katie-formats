@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v33 -->
+  <!-- BUST-v34 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -747,27 +747,33 @@ async function generateVideos() {
       motionBreakdown = ad.motionBreakdown;
       duration = ad.duration || 0;
 
-      // 1b. Single clip — trim the script to the strongest ~10s in the prompt builder
-      setStatus(`Writing prompt ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
-      const pr = await fetch('/api/omni', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'prompt',
-          script: scriptText,
-          thumbnail: s.format?.thumbnail || null,
-          motionBreakdown,
-          trimToTenSec: duration > 12
-        })
-      });
-      const pd = await pr.json();
-      if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
-      prepared.push({
-        scriptObj: s,
-        promptText: pd.promptText,
-        clipLabel: null,
-        videoIndex: i
-      });
+      // 1b. Decide clip count: <=10s → 1, 10-25s → 2, >25s → 3
+      const numClips = duration > 25 ? 3 : (duration > 10 ? 2 : 1);
+      const scriptParts = splitScriptIntoClips(scriptText, numClips);
+
+      // 1c. Build one Omni prompt per clip
+      for (let c = 0; c < scriptParts.length; c++) {
+        setStatus(`Writing prompt ${i+1}.${c+1} (clip ${c+1}/${numClips})...`, '@' + s.format.author);
+        const pr = await fetch('/api/omni', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'prompt',
+            script: scriptParts[c],
+            thumbnail: s.format?.thumbnail || null,
+            motionBreakdown,
+            clipInfo: numClips > 1 ? { index: c+1, total: numClips } : null
+          })
+        });
+        const pd = await pr.json();
+        if (!pr.ok || pd.error) throw new Error(`Prompt (${pr.status}): ${pd.error || JSON.stringify(pd)}`);
+        prepared.push({
+          scriptObj: s,
+          promptText: pd.promptText,
+          clipLabel: numClips > 1 ? `Clip ${c+1} of ${numClips}` : null,
+          videoIndex: i
+        });
+      }
     }
 
     // Hand off to the review screen — generation happens only after approval
