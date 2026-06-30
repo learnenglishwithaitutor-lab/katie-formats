@@ -803,7 +803,7 @@ function showPromptReview(prepared) {
   const render = () => {
     document.getElementById('app').innerHTML = `
       ${headerHTML(pulled, null, true, 'Review prompts')}
-      <div style="padding:16px 14px 100px;">
+      <div style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 14px 120px;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">
           Review each Omni prompt before generating. Only approved ones will be sent (each costs a generation).
         </div>
@@ -812,7 +812,7 @@ function showPromptReview(prepared) {
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
               <span style="font-size:13px;font-weight:600;">@${p.scriptObj.format.author}${p.clipLabel ? ` · <span style="color:var(--accent,#6C5CE7);">${p.clipLabel}</span>` : ''}</span>
             </div>
-            <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;max-height:240px;overflow-y:auto;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
+            <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;overflow:visible;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
             <button onclick="togglePromptApprove(${i})" class="btn-secondary" style="${approved.has(i)?'border-color:var(--approve);color:var(--approve);':'border-color:var(--reject);color:var(--reject);'}">
               ${approved.has(i) ? '✓ Will generate — tap to skip' : '✕ Skipped — tap to include'}
             </button>
