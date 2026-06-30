@@ -18,7 +18,7 @@ const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
 // ── Generate Omni prompt TEXT via Claude (goes inside the PNG) ──
 async function generateOmniPrompt(script, thumbnailUrl, motionBreakdown, clipInfo) {
   const clipNote = clipInfo
-    ? `\n\nNOTE: This is clip ${clipInfo.index} of ${clipInfo.total} of a longer video, stitched later. Generate ONLY this segment's words at a natural, unhurried pace. Use the part of the movement breakdown matching these words. Keep Norah in the same bedroom and similar energy across clips for continuity.`
+    ? `\n\nNOTE: This is clip ${clipInfo.index} of ${clipInfo.total} of a longer video that will be stitched together. The clips MUST look continuous: identical room, identical framing/camera distance, identical lighting, and the SAME warm upbeat baseline energy as the other clips. Use the exact Setting line provided. Generate ONLY this segment's words at a natural, unhurried pace, using the matching part of the movement breakdown.`
     : '';
   // If we have a real motion breakdown from the decode service (derived from
   // watching the actual video frames), use it directly. Otherwise fall back to
@@ -38,16 +38,18 @@ Generate a video of this girl saying the following, clearly and naturally:
 Use the video attached as reference for her voice (norah_new_voice.mp4). Make sure she is naturally expressive when she is speaking.
 
 Movement:
-[USE THE PROVIDED MOVEMENT BREAKDOWN — these are the real gestures from the source video, adapted to Norah talking to camera. Do not invent different gestures.]
+[USE THE PROVIDED MOVEMENT BREAKDOWN — these are the real gestures from the source video, adapted to Norah talking to camera. Do not invent different gestures. Write each gesture ANCHORED TO THE WORD it lands on, e.g. At "Absolutely," right index finger points up. At "Certainly," open palm sweeps inward. NEVER use timestamps like 0:00-0:03 — anchor to words only.]
 
-Setting: Home bedroom background, casual and warm, naturally expressive.
+Setting: Same cozy home bedroom — plain warm-white wall behind her, soft natural daylight from the side, a couple of small framed pictures, waist-up framing with the camera at eye level. Warm, upbeat, friendly UGC energy throughout.
 Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.
 
 Rules:
 - Output ONLY the prompt text — no labels, no preamble
 - Keep script under 28 words for 10 seconds; truncate at a sentence boundary if longer
 - The Movement section MUST use the provided breakdown — that's the whole point
-- The setting stays Norah's bedroom — never transplant the original's location
+- Movement MUST be word-anchored (At "word," gesture). NEVER emit timestamps (no 0:00-0:03). Timestamps are forbidden because each clip is a fresh ~10s generation and fabricated times cause rushing.
+- COPY THE SETTING LINE EXACTLY AS GIVEN ABOVE, word for word, every time — do not paraphrase or vary it. Identical setting + framing + energy across clips is what lets them stitch seamlessly.
+- Keep the SAME baseline energy (warm, upbeat, expressive) in every clip; only the per-word delivery notes should vary with the words' meaning (e.g. confident vs skeptical). Do not let the overall mood drop between clips.
 - Always name the voice file as norah_new_voice.mp4
 - Do NOT use detachable props
 - CAPS for emphasis words only, sparingly`,
