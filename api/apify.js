@@ -53,15 +53,26 @@ export default async function handler(req, res) {
     }
 
     if (action === 'results' && datasetId) {
-      const fiveDaysAgo = Math.floor(Date.now() / 1000) - (5 * 24 * 60 * 60);
       const response = await fetch(
         `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}&limit=200`
       );
       const items = await response.json();
 
-      const filtered = items.filter(item =>
-        item.createTimeISO && new Date(item.createTimeISO).getTime() / 1000 > fiveDaysAgo
-      );
+      // Keep the latest 10 videos per account, regardless of post date.
+      const byAuthor = {};
+      for (const item of items) {
+        const author = item.authorMeta?.name || 'unknown';
+        (byAuthor[author] = byAuthor[author] || []).push(item);
+      }
+      const filtered = [];
+      for (const author of Object.keys(byAuthor)) {
+        const sorted = byAuthor[author].sort((a, b) => {
+          const ta = a.createTimeISO ? new Date(a.createTimeISO).getTime() : (a.createTime || 0) * 1000;
+          const tb = b.createTimeISO ? new Date(b.createTimeISO).getTime() : (b.createTime || 0) * 1000;
+          return tb - ta; // newest first
+        });
+        filtered.push(...sorted.slice(0, 10));
+      }
 
       const videos = filtered.map(item => ({
         title:     item.text || item.desc || 'No caption',
