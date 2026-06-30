@@ -74,6 +74,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ videos });
     }
 
+    // ── Raw item dump: see ALL fields Apify returns for one video ──
+    if (action === 'rawitem' && datasetId) {
+      const response = await fetch(
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}&limit=5`
+      );
+      const items = await response.json();
+      if (!items.length) return res.status(200).json({ error: 'no items' });
+      // Return the full first item + a list of all top-level keys
+      return res.status(200).json({
+        topLevelKeys: Object.keys(items[0]),
+        videoMetaKeys: items[0].videoMeta ? Object.keys(items[0].videoMeta) : null,
+        videoMeta: items[0].videoMeta || null,
+        mediaUrls: items[0].mediaUrls || null,
+        webVideoUrl: items[0].webVideoUrl || null,
+        fullItem: items[0]
+      });
+    }
+
     // ── Debug endpoint ──────────────────────────────────────────
     if (action === 'debug' && datasetId) {
       const fiveDaysAgo = Math.floor(Date.now() / 1000) - (5 * 24 * 60 * 60);
