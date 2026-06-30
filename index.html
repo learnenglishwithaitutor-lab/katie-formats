@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v24 -->
+  <!-- BUST-v25 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -672,6 +672,23 @@ async function generateVideos() {
   const cachedVids = loadGeneratedVideos();
   if (cachedVids && cachedVids.length > 0) { generatedVideos = cachedVids; showStage3Done(); return; }
   const pulled = localStorage.getItem('kf_pulled');
+
+  // Guard: need valid approved scripts (each with a .format) to generate
+  const validScripts = (approvedScripts || []).filter(s => s && s.format);
+  if (!validScripts.length) {
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(pulled, null, true, 'Generate videos')}
+      <div class="loading-screen">
+        <div style="font-size:40px;margin-bottom:16px;">📝</div>
+        <div style="font-weight:600;margin-bottom:8px;">No approved scripts yet</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:24px;max-width:300px;text-align:center;">
+          Pull fresh videos, approve a format, then approve a script — then come back here to generate.
+        </div>
+        <button class="btn-primary" onclick="showHome()">← Start from Home</button>
+      </div>`;
+    return;
+  }
+  approvedScripts = validScripts;
   generatedVideos = [];
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
