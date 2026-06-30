@@ -7,6 +7,10 @@ import path from 'path';
 const KIE_TOKEN     = process.env.KIE_API_TOKEN;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
+// Decode service (Railway) — downloads video, extracts frames, returns motion breakdown
+const DECODE_URL    = process.env.DECODE_SERVICE_URL || 'https://katie-decode-production.up.railway.app';
+const DECODE_SECRET = process.env.DECODE_SECRET;
+
 const KIE_UPLOAD_URL = 'https://kieai.redpandaai.co/api/file-stream-upload';
 const KIE_CREATE_URL = 'https://api.kie.ai/api/v1/jobs/createTask';
 const KIE_POLL_URL   = 'https://api.kie.ai/api/v1/jobs/recordInfo';
@@ -205,6 +209,30 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const body = req.body || {};
   const action = body.action;
+
+  // ── action=analyze: call decode service for the real motion breakdown ──
+  if (action === 'analyze') {
+    const videoFile = body.videoFile;
+    const script = body.script || '';
+    if (!videoFile) return res.status(400).json({ error: 'videoFile required' });
+    try {
+      const dres = await fetch(`${DECODE_URL}/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(DECODE_SECRET ? { 'x-decode-secret': DECODE_SECRET } : {})
+        },
+        body: JSON.stringify({ videoUrl: videoFile, script })
+      });
+      const ddata = await dres.json();
+      if (!dres.ok || !ddata.ok) {
+        return res.status(502).json({ error: 'decode service: ' + (ddata.error || dres.status) });
+      }
+      return res.status(200).json({ motionBreakdown: ddata.movementBreakdown, frameCount: ddata.frameCount });
+    } catch (err) {
+      return res.status(500).json({ error: 'decode call failed: ' + err.message });
+    }
+  }
 
   // ── action=prompt: Claude generates the prompt text (for the PNG) ──
   if (action === 'prompt') {
