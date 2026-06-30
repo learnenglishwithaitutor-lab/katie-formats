@@ -55,11 +55,88 @@ async function getAccessToken() {
   return tokenData.access_token;
 }
 
+// ── Ensure a tab (sheet) exists, return true if present/created ──
+async function ensureTab(token, title) {
+  const meta = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).then(r => r.json());
+  const exists = (meta.sheets || []).some(s => s.properties?.title === title);
+  if (exists) return true;
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] })
+    }
+  );
+  return true;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const action = req.method === 'GET' ? req.query.action : (req.body?.action);
+
+  // ── action=queue: write the work order (approved batch) to the Queue tab ──
+  // Columns: ID | VideoURL | Author | Script | Status | PromptPngLink | OutputUrl
+  if (action === 'queue') {
+    try {
+      const items = req.body?.items || [];
+      if (!items.length) return res.status(400).json({ error: 'no items' });
+      const token = await getAccessToken();
+      await ensureTab(token, 'Queue');
+
+      // Add header row if Queue is empty
+      const head = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!A1:G1`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const values = [];
+      if (!head.values || !head.values.length) {
+        values.push(['ID', 'VideoURL', 'Author', 'Script', 'Status', 'PromptPngLink', 'OutputUrl']);
+      }
+      for (const it of items) {
+        const id = it.id || (Date.now() + '-' + Math.random().toString(36).slice(2, 7));
+        values.push([ id, it.videoUrl || '', it.author || '', it.script || '', 'pending', '', '' ]);
+      }
+      const appendRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values })
+        }
+      ).then(r => r.json());
+      return res.status(200).json({ ok: true, queued: items.length, updatedRange: appendRes.updates?.updatedRange });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── action=readqueue: read Queue rows (optionally filter by status) ──
+  if (action === 'readqueue') {
+    try {
+      const token = await getAccessToken();
+      const data = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!A2:G1000`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const wantStatus = req.query.status;
+      const rows = (data.values || []).map(r => ({
+        id: r[0], videoUrl: r[1], author: r[2], script: r[3],
+        status: r[4], promptPngLink: r[5], outputUrl: r[6]
+      })).filter(r => r.id && (!wantStatus || r.status === wantStatus));
+      return res.status(200).json({ rows });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
