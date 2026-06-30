@@ -118,6 +118,20 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=clearqueue: wipe all Queue rows below the header ──
+  if (action === 'clearqueue') {
+    try {
+      const token = await getAccessToken();
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!A2:G10000:clear`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      );
+      return res.status(200).json({ ok: true, cleared: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=readqueue: read Queue rows (optionally filter by status) ──
   if (action === 'readqueue') {
     try {
