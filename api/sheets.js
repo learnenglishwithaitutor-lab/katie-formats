@@ -118,6 +118,45 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=updaterow: update a Queue row by ID (Cowork calls this) ──
+  // Body: { action:'updaterow', id, status?, promptPngLink?, outputUrl? }
+  if (action === 'updaterow') {
+    try {
+      const { id, status, promptPngLink, outputUrl } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'id required' });
+      const token = await getAccessToken();
+
+      // Read the Queue to find which row this ID is on
+      const data = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!A2:G10000`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const rows = data.values || [];
+      const idx = rows.findIndex(r => r[0] === id);
+      if (idx === -1) return res.status(404).json({ error: 'id not found in Queue' });
+
+      const sheetRow = idx + 2; // +2: header is row 1, data starts row 2
+      const current = rows[idx];
+      // Columns: A=ID B=VideoURL C=Author D=Script E=Status F=PromptPngLink G=OutputUrl
+      const newStatus  = status        !== undefined ? status        : (current[4] || '');
+      const newPng     = promptPngLink !== undefined ? promptPngLink : (current[5] || '');
+      const newOutput  = outputUrl     !== undefined ? outputUrl     : (current[6] || '');
+
+      const updateRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Queue!E${sheetRow}:G${sheetRow}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [[ newStatus, newPng, newOutput ]] })
+        }
+      ).then(r => r.json());
+
+      return res.status(200).json({ ok: true, id, row: sheetRow, updated: updateRes.updatedCells || 0 });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=clearqueue: wipe all Queue rows below the header ──
   if (action === 'clearqueue') {
     try {
