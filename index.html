@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v26 -->
+  <!-- BUST-v27 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -667,12 +667,11 @@ function splitScriptIntoClips(script, numClips) {
 }
 
 async function generateVideos() {
-  const cachedVids = loadGeneratedVideos();
-  if (cachedVids && cachedVids.length > 0) { generatedVideos = cachedVids; showStage3Done(); return; }
   const pulled = localStorage.getItem('kf_pulled');
 
-  // Guard: need valid approved scripts (each with a .format) to generate
-  const validScripts = (approvedScripts || []).filter(s => s && s.format);
+  // Always reload approved scripts from storage so the array is never stale/empty
+  const savedScripts = loadApprovedScripts() || [];
+  const validScripts = savedScripts.filter(s => s && s.format);
   if (!validScripts.length) {
     document.getElementById('app').innerHTML = `
       ${headerHTML(pulled, null, true, 'Generate videos')}
@@ -687,6 +686,8 @@ async function generateVideos() {
     return;
   }
   approvedScripts = validScripts;
+  // Fresh generation — clear any stale generated-video cache
+  ['kf_generated_videos','kf_generated_videos_date'].forEach(k=>localStorage.removeItem(k));
   generatedVideos = [];
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
