@@ -22,6 +22,8 @@ export default async function handler(req, res) {
       if (req.method === 'POST' && req.body?.profiles?.length > 0) {
         profiles = req.body.profiles;
       }
+      // Allow a one-off test run that downloads videos (for CORS/frame-extraction testing)
+      const downloadVideos = req.query.downloadVideos === '1';
       const response = await fetch(
         `https://api.apify.com/v2/acts/${ACTOR_ID}/runs?token=${APIFY_TOKEN}`,
         {
@@ -29,8 +31,8 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             profiles,
-            resultsPerPage: 30,
-            shouldDownloadVideos: false,
+            resultsPerPage: downloadVideos ? 3 : 30,
+            shouldDownloadVideos: downloadVideos,
             shouldDownloadCovers: false
           })
         }
