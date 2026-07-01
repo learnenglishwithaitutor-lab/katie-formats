@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v41 -->
+  <!-- BUST-v42 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -894,16 +894,18 @@ async function generateApprovedPrompts() {
   }
 }
 
-// Poll all generatedVideos until complete, then show done screen
-async function pollGeneratedVideos(setStatus) {
+// Poll generatedVideos until complete. If `scopeItems` is passed, the status
+// display counts only those (e.g. a single regenerated clip) instead of all.
+async function pollGeneratedVideos(setStatus, scopeItems) {
   const results = generatedVideos;
+  const scope = scopeItems || results;
   let attempts = 0;
   while (attempts < 60) {
     await new Promise(r => setTimeout(r, 10000));
     attempts++;
-    const pending = results.filter(r => r.status === 'processing');
-    const done = results.length - pending.length;
-    setStatus(`Generating... (${attempts * 10}s elapsed)`, `${done} / ${results.length} complete`);
+    const pending = scope.filter(r => r.status === 'processing');
+    const done = scope.length - pending.length;
+    setStatus(`Generating... (${attempts * 10}s elapsed)`, `${done} / ${scope.length} complete`);
     for (const item of pending) {
       try {
         const sr = await fetch(`/api/omni?action=status&taskId=${item.taskId}`);
@@ -917,9 +919,9 @@ async function pollGeneratedVideos(setStatus) {
         }
       } catch(e) { /* keep polling */ }
     }
-    if (results.every(r => r.status !== 'processing')) break;
+    if (scope.every(r => r.status !== 'processing')) break;
   }
-  results.forEach(r => { if (r.status === 'processing') r.status = 'failed'; });
+  scope.forEach(r => { if (r.status === 'processing') r.status = 'failed'; });
   generatedVideos = results;
   saveGeneratedVideos(results);
   showStage3Done();
@@ -1165,9 +1167,10 @@ async function regenerateOne(idx) {
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || 'failed'}`);
-    // Reset just this item and poll all (only this one is processing)
+    // Reset just this item and poll ONLY this one (scope = [item]) so the
+    // status shows accurate 0/1 progress, not the whole set.
     item.taskId = data.taskId; item.status = 'processing'; item.video_url = null; item.failMsg = null;
-    await pollGeneratedVideos(setStatus);
+    await pollGeneratedVideos(setStatus, [item]);
   } catch (err) {
     const msg = /load failed|fetch|network/i.test(err.message)
       ? 'Network error — check your connection and try again.'
