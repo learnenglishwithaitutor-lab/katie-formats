@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v36 -->
+  <!-- BUST-v37 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1002,31 +1002,51 @@ async function sendAllToDrive() {
     localStorage.setItem('kf_drive_folder_id', folderId);
   }
 
-  const videos = completed.map((v, i) => ({
-    url: v.video_url,
-    filename: `katie_${(v.scriptObj?.format?.author || 'video')}_${(v.clipLabel || 'clip').replace(/\s+/g, '')}_${i + 1}.mp4`
-  }));
+  // Group completed clips by their source video (videoIndex) — same grouping
+  // used on the done screen, so stitching/subfolders match what's shown there.
+  const groupsMap = {};
+  generatedVideos.forEach((v, idx) => {
+    if (v.status !== 'completed' || !v.video_url) return;
+    const key = (v.videoIndex !== undefined && v.videoIndex !== null) ? v.videoIndex : `solo_${idx}`;
+    (groupsMap[key] = groupsMap[key] || []).push(v);
+  });
+  const groups = Object.values(groupsMap).map(clips => {
+    clips.sort((a, b) => (a.clipLabel || '').localeCompare(b.clipLabel || ''));
+    const author = clips[0]?.scriptObj?.format?.author || 'video';
+    return {
+      author,
+      clips: clips.map((c, i) => ({
+        url: c.video_url,
+        filename: `katie_${author}_${(c.clipLabel || ('clip' + (i + 1))).replace(/\s+/g, '')}.mp4`
+      }))
+    };
+  });
+  if (!groups.length) { alert('No completed videos to send.'); return; }
+
+  const multiClipGroups = groups.filter(g => g.clips.length >= 2).length;
+  const totalFiles = groups.reduce((n, g) => n + g.clips.length + (g.clips.length >= 2 ? 1 : 0), 0);
 
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="loading-screen">
       <div class="loading-spinner"></div>
-      <div class="loading-title">Sending ${videos.length} video${videos.length!==1?'s':''} to Drive...</div>
-      <div class="loading-sub">This can take a minute</div>
+      <div class="loading-title">Sending to Drive...</div>
+      <div class="loading-sub">${groups.length} video${groups.length !== 1 ? 's' : ''} · ${totalFiles} file${totalFiles !== 1 ? 's' : ''}${multiClipGroups ? ' (clips + stitched)' : ''} — this can take a minute</div>
     </div>`;
 
   try {
     const res = await fetch('/api/drive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken, folderId: folderId || null, videos })
+      body: JSON.stringify({ refreshToken, folderId: folderId || null, groups })
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'failed');
-    const okCount = data.results.filter(r => r.ok).length;
-    const failCount = data.results.length - okCount;
-    alert(`Sent ${okCount} video(s) to Drive.` + (failCount ? ` ${failCount} failed — check the folder ID and try again.` : ''));
+    const allResults = (data.groups || []).flatMap(g => g.results || []);
+    const okCount = allResults.filter(r => r.ok).length;
+    const failCount = allResults.length - okCount;
+    alert(`Sent ${okCount} file(s) to Drive.` + (failCount ? ` ${failCount} failed — check the folder ID and try again.` : ''));
   } catch (err) {
     if (/expired|revoked|reconnect/i.test(err.message)) {
       localStorage.removeItem('kf_google_refresh_token');
