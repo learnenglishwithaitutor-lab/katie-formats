@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v45 -->
+  <!-- BUST-v46 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -667,6 +667,11 @@ function splitScriptIntoClips(script, numClips) {
   return parts.filter(p => p.trim());
 }
 
+// Heuristic: does this failure message look like a content-policy rejection?
+function isPolicyReason(msg) {
+  return /policy|sensitive|nsfw|violat|inappropriate|flagged|prohibited|not allowed|safety|blocked/i.test(String(msg || ''));
+}
+
 // Submit the Norah first-frame swap, then poll status until the image is ready.
 // Returns the image URL, or null if it fails/times out (caller falls back to
 // the bundled avatar). ~90s ceiling — well beyond nano-banana's usual 10-30s.
@@ -681,17 +686,22 @@ async function makeNorahFrame(refFrameB64) {
 
   for (let i = 0; i < 30; i++) {
     await new Promise(r => setTimeout(r, 3000));
+    let pd;
     try {
       const pr = await fetch(`/api/omni?action=status&taskId=${sd.taskId}`);
-      const pd = await pr.json();
-      if (pd.status === 'success' && pd.videoUrl) return pd.videoUrl; // image URL
-      if (pd.status === 'fail') throw new Error(pd.failMsg || 'swap failed');
+      pd = await pr.json();
     } catch (e) {
-      if (/swap failed/.test(e.message)) throw e; // real rejection — stop
-      /* transient poll error — keep trying */
+      continue; // transient network/poll error — keep trying
+    }
+    if (pd.status === 'success' && pd.videoUrl) return pd.videoUrl; // image URL
+    if (pd.status === 'fail') {
+      // Real rejection from kie (often content-policy) — surface it verbatim
+      const err = new Error(pd.failMsg || 'swap rejected (no reason given)');
+      err.rejected = true;
+      throw err;
     }
   }
-  throw new Error('first-frame swap timed out');
+  throw new Error('first-frame swap timed out (>90s)');
 }
 
 async function safeGenerate() {
@@ -778,11 +788,16 @@ async function generateVideos() {
       //        swaps the person to Norah). Per video, shared by all its clips.
       //        Non-fatal: on failure we fall back to the bundled avatar.
       let norahFrameUrl = null;
+      let frameErr = null;
       if (ad.firstFrame) {
         setStatus(`Creating Norah first frame ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
         try {
           norahFrameUrl = await makeNorahFrame(ad.firstFrame);
-        } catch (e) { /* fall back to bundled avatar */ }
+        } catch (e) {
+          frameErr = { rejected: !!e.rejected || isPolicyReason(e.message), msg: (e.message || String(e)) };
+        }
+      } else {
+        frameErr = { rejected: false, msg: 'decode returned no first frame (redeploy pending?)' };
       }
 
       // 1b. Decide clip count: <=10s → 1, 10-25s → 2, >25s → 3
@@ -811,6 +826,7 @@ async function generateVideos() {
           clipLabel: numClips > 1 ? `Clip ${c+1} of ${numClips}` : null,
           videoIndex: i,
           norahFrameUrl,
+          frameErr,
           refFirstFrame: ad.firstFrame || null
         });
       }
@@ -855,10 +871,13 @@ function showPromptReview(prepared, savedApprovedIdx) {
             </div>
             <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;overflow:visible;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
             <div style="margin:0 0 10px;">
-              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Norah first frame ${p.norahFrameUrl ? '(start image for this video)' : '— using default avatar (swap unavailable)'}</div>
               ${p.norahFrameUrl
-                ? `<img src="${p.norahFrameUrl}" style="width:96px;border-radius:8px;border:0.5px solid var(--border);display:block;margin-bottom:6px;" />`
-                : ''}
+                ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Norah first frame (start image for this video)</div>
+                   <img src="${p.norahFrameUrl}" style="width:96px;border-radius:8px;border:0.5px solid var(--border);display:block;margin-bottom:6px;" />`
+                : `<div style="font-size:11px;color:var(--reject);margin-bottom:2px;font-weight:600;">
+                     ${p.frameErr && p.frameErr.rejected ? '⚠ Swap rejected by content policy' : '⚠ Swap failed'} — using default avatar
+                   </div>
+                   ${p.frameErr && p.frameErr.msg ? `<div style="font-size:10px;color:var(--muted);margin-bottom:6px;word-break:break-word;">${String(p.frameErr.msg).replace(/</g,'&lt;').slice(0,240)}</div>` : ''}`}
               <button onclick="regenerateFirstFrame(${i})" class="btn-secondary" style="font-size:12px;padding:8px;">↻ Regenerate first frame</button>
             </div>
             <button onclick="togglePromptApprove(${i})" class="btn-secondary" style="${approved.has(i)?'border-color:var(--approve);color:var(--approve);':'border-color:var(--reject);color:var(--reject);'}">
@@ -898,12 +917,14 @@ async function regenerateFirstFrame(i) {
   try {
     const imageUrl = await makeNorahFrame(ref);
     // Apply to every clip of this video
-    prepared.forEach(p => { if (p.videoIndex === vIdx) p.norahFrameUrl = imageUrl; });
+    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = imageUrl; p.frameErr = null; } });
     savePreparedPrompts(prepared);
     window.__renderPromptReview();
   } catch (e) {
-    alert('First-frame regeneration failed: ' + (e.message || e));
-    btns.forEach(b => { b.disabled = false; b.textContent = '↻ Regenerate first frame'; });
+    const frameErr = { rejected: !!e.rejected || isPolicyReason(e.message), msg: (e.message || String(e)) };
+    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = null; p.frameErr = frameErr; } });
+    savePreparedPrompts(prepared);
+    window.__renderPromptReview();
   }
 }
 
