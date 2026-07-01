@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v37 -->
+  <!-- BUST-v38 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v38';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -778,6 +778,7 @@ async function generateVideos() {
 
     // Hand off to the review screen — generation happens only after approval
     window.__preparedPrompts = prepared;
+    savePreparedPrompts(prepared);
     showPromptReview(prepared);
     return;
   } catch (err) {
@@ -795,8 +796,8 @@ async function generateVideos() {
 }
 
 // Review screen: show each assembled prompt read-only with Approve/Skip
-function showPromptReview(prepared) {
-  const approved = new Set(prepared.map((_, i) => i)); // all approved by default
+function showPromptReview(prepared, savedApprovedIdx) {
+  const approved = savedApprovedIdx ? new Set(savedApprovedIdx) : new Set(prepared.map((_, i) => i)); // all approved by default
   window.__promptApproved = approved;
   const pulled = localStorage.getItem('kf_pulled');
 
@@ -821,6 +822,7 @@ function showPromptReview(prepared) {
           Generate approved (${approved.size}) →
         </button>
         <button class="btn-secondary" onclick="showHome()">← Home</button>
+        <button onclick="reanalyzeFromScratch()" style="background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit;display:block;margin:14px auto 0;">↻ Re-analyze from scratch</button>
       </div>`;
   };
   window.__renderPromptReview = render;
@@ -830,7 +832,15 @@ function showPromptReview(prepared) {
 function togglePromptApprove(i) {
   const set = window.__promptApproved;
   if (set.has(i)) set.delete(i); else set.add(i);
+  saveApprovedPromptIdx(set);
   window.__renderPromptReview();
+}
+
+// Discard cached prompts/analysis and rebuild from scratch (e.g. after a prompt-logic change)
+function reanalyzeFromScratch() {
+  if (!confirm('Re-analyze the video and rebuild prompts from scratch? This re-runs motion analysis and costs a bit of time.')) return;
+  ['kf_prepared_prompts','kf_prepared_prompts_fp','kf_prompt_approved_idx'].forEach(k => localStorage.removeItem(k));
+  generateVideos();
 }
 
 // Generate only the approved prepared prompts
@@ -879,7 +889,7 @@ async function generateApprovedPrompts() {
         <div style="font-size:40px;margin-bottom:16px;">⚠️</div>
         <div style="font-weight:600;margin-bottom:8px;">Something went wrong</div>
         <div style="color:var(--muted);font-size:13px;margin-bottom:24px;max-width:300px;text-align:center;">${err.message}</div>
-        <button class="btn-secondary" onclick="showPromptReview(window.__preparedPrompts)">← Back to review</button>
+        <button class="btn-secondary" onclick="showPromptReview(window.__preparedPrompts, [...(window.__promptApproved||[])])">← Back to review</button>
       </div>`;
   }
 }
@@ -1092,6 +1102,7 @@ async function stitchGroup(clipUrls, author) {
           <video src="${url}" controls playsinline style="width:100%;border-radius:12px;background:#000;max-height:70vh;"></video>
         </div>
         <a href="${url}" download="katie_${author}_stitched.mp4" class="btn-primary" style="text-decoration:none;display:block;text-align:center;">Download stitched video ↓</a>
+        <button class="btn-secondary" onclick="sendAllToDrive()" style="margin-top:8px;">☁️ Send to Drive</button>
         <button class="btn-secondary" onclick="showStage3Done()">← Back to clips</button>
       </div>`;
   } catch (err) {
@@ -1369,6 +1380,7 @@ function loadApprovedScripts() {
 function saveGeneratedVideos(videos) {
   localStorage.setItem('kf_generated_videos', JSON.stringify(videos));
   localStorage.setItem('kf_generated_videos_date', new Date().toISOString());
+  localStorage.setItem('kf_generated_videos_fp', scriptsFingerprint(approvedScripts));
 }
 function loadGeneratedVideos() {
   try {
@@ -1377,11 +1389,32 @@ function loadGeneratedVideos() {
   } catch(e) {}
   return null;
 }
+
+// Identifies which set of approved scripts a cached result belongs to, so we
+// only reuse cached prompts/videos when they still match what's approved now.
+function scriptsFingerprint(scripts) {
+  return (scripts || []).map(s => (s.format?.author || '') + '|' + (s.script || s.text || s.katie_script || '')).join('::');
+}
+function savePreparedPrompts(prepared) {
+  localStorage.setItem('kf_prepared_prompts', JSON.stringify(prepared));
+  localStorage.setItem('kf_prepared_prompts_fp', scriptsFingerprint(approvedScripts));
+}
+function loadPreparedPrompts() {
+  try {
+    const v = localStorage.getItem('kf_prepared_prompts');
+    if (v) return JSON.parse(v);
+  } catch(e) {}
+  return null;
+}
+function saveApprovedPromptIdx(idxSet) {
+  localStorage.setItem('kf_prompt_approved_idx', JSON.stringify([...idxSet]));
+}
 function clearAllApproved() {
   ['kf_approved_formats','kf_approved_formats_date',
    'kf_approved_scripts','kf_approved_scripts_date',
    'kf_generated_scripts','kf_generated_scripts_date',
-   'kf_generated_videos','kf_generated_videos_date'].forEach(k => localStorage.removeItem(k));
+   'kf_generated_videos','kf_generated_videos_date','kf_generated_videos_fp',
+   'kf_prepared_prompts','kf_prepared_prompts_fp','kf_prompt_approved_idx'].forEach(k => localStorage.removeItem(k));
 }
 function shortDate(iso) {
   if (!iso) return '';
@@ -1456,7 +1489,7 @@ function showHome() {
 
 function resetAppData() {
   if (!confirm('Clear all approved formats, scripts, and generated videos? (Your tracked accounts stay.) This fixes a stuck state.')) return;
-  ['kf_approved_formats','kf_approved_formats_date','kf_approved_scripts','kf_approved_scripts_date','kf_generated_scripts','kf_generated_scripts_date','kf_generated_videos','kf_generated_videos_date'].forEach(k=>localStorage.removeItem(k));
+  ['kf_approved_formats','kf_approved_formats_date','kf_approved_scripts','kf_approved_scripts_date','kf_generated_scripts','kf_generated_scripts_date','kf_generated_videos','kf_generated_videos_date','kf_generated_videos_fp','kf_prepared_prompts','kf_prepared_prompts_fp','kf_prompt_approved_idx'].forEach(k=>localStorage.removeItem(k));
   approved.length = 0; rejected.length = 0;
   approvedScripts.length = 0; rejectedScripts.length = 0;
   scripts = []; generatedVideos = [];
@@ -1504,6 +1537,31 @@ function startStage3() {
   if (!savedScripts) return;
   approvedScripts.length = 0;
   savedScripts.forEach(s => approvedScripts.push(s));
+  const fp = scriptsFingerprint(approvedScripts);
+
+  // Resume 1: videos already fully generated for this exact set of approved scripts
+  const cachedVideos = loadGeneratedVideos();
+  if (cachedVideos && cachedVideos.length && localStorage.getItem('kf_generated_videos_fp') === fp) {
+    generatedVideos = cachedVideos;
+    showStage3Done();
+    return;
+  }
+
+  // Resume 2: prompts already built (analyzed + written) for this exact set — skip
+  // straight to review instead of re-running motion analysis + prompt generation.
+  const cachedPrepared = loadPreparedPrompts();
+  if (cachedPrepared && cachedPrepared.length && localStorage.getItem('kf_prepared_prompts_fp') === fp) {
+    window.__preparedPrompts = cachedPrepared;
+    let savedIdx = null;
+    try {
+      const raw = localStorage.getItem('kf_prompt_approved_idx');
+      if (raw) savedIdx = JSON.parse(raw);
+    } catch(e) {}
+    showPromptReview(cachedPrepared, savedIdx);
+    return;
+  }
+
+  // Nothing usable cached — build fresh (this is the only path that costs analysis + prompt calls)
   generateVideos();
 }
 
