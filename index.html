@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v35 -->
+  <!-- BUST-v36 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -957,6 +957,8 @@ function showStage3Done() {
       </div>`;
   }).join('');
 
+  const driveConnected = !!localStorage.getItem('kf_google_refresh_token');
+
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="done" style="justify-content:flex-start;">
@@ -970,9 +972,70 @@ function showStage3Done() {
       <div class="video-results" style="width:100%;">
         ${groupHTML}
       </div>
+      ${completed.length > 0 ? `
+      <button class="btn-primary" onclick="sendAllToDrive()" style="margin-bottom:8px;">
+        ☁️ Send all ${completed.length} video${completed.length!==1?'s':''} to Drive${driveConnected ? '' : ' (connect)'}
+      </button>` : ''}
       <button class="btn-secondary" onclick="regenerateVideos()">Regenerate all</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
+}
+
+// Send every completed clip to the user's chosen Drive folder (via OAuth)
+async function sendAllToDrive() {
+  const completed = generatedVideos.filter(v => v.status === 'completed' && v.video_url);
+  if (!completed.length) { alert('No completed videos to send.'); return; }
+
+  let refreshToken = localStorage.getItem('kf_google_refresh_token');
+  if (!refreshToken) {
+    if (confirm('Connect your Google account to send videos to Drive?')) {
+      window.location.href = '/api/auth';
+    }
+    return;
+  }
+
+  let folderId = localStorage.getItem('kf_drive_folder_id');
+  if (folderId === null) {
+    const input = prompt("Paste the Google Drive folder ID to upload into (the part of the folder's URL after /folders/). Leave blank to use My Drive root.");
+    if (input === null) return; // cancelled
+    folderId = input.trim();
+    localStorage.setItem('kf_drive_folder_id', folderId);
+  }
+
+  const videos = completed.map((v, i) => ({
+    url: v.video_url,
+    filename: `katie_${(v.scriptObj?.format?.author || 'video')}_${(v.clipLabel || 'clip').replace(/\s+/g, '')}_${i + 1}.mp4`
+  }));
+
+  const pulled = localStorage.getItem('kf_pulled');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(pulled, null, true, 'Generate videos')}
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-title">Sending ${videos.length} video${videos.length!==1?'s':''} to Drive...</div>
+      <div class="loading-sub">This can take a minute</div>
+    </div>`;
+
+  try {
+    const res = await fetch('/api/drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken, folderId: folderId || null, videos })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'failed');
+    const okCount = data.results.filter(r => r.ok).length;
+    const failCount = data.results.length - okCount;
+    alert(`Sent ${okCount} video(s) to Drive.` + (failCount ? ` ${failCount} failed — check the folder ID and try again.` : ''));
+  } catch (err) {
+    if (/expired|revoked|reconnect/i.test(err.message)) {
+      localStorage.removeItem('kf_google_refresh_token');
+      if (confirm('Google connection expired. Reconnect now?')) { window.location.href = '/api/auth'; return; }
+    } else {
+      alert('Send to Drive failed: ' + err.message);
+    }
+  }
+  showStage3Done();
 }
 
 // Stitch a group's completed clips (ordered) into one MP4 via the decode service
