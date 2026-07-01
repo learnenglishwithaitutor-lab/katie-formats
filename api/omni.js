@@ -174,11 +174,16 @@ async function readAsset(filename) {
 // Keeps the reference frame's background/pose/framing, swaps the person to Norah.
 async function submitKieImageTask(refFrameUrl, norahUrl) {
   const prompt =
-    'Replace the person in the FIRST image with the woman shown in the SECOND image. ' +
-    'Keep the FIRST image exactly as-is otherwise: same background, same setting, same camera framing and distance, ' +
-    'same body pose, same head angle, and same hand positions. Only the person\'s identity changes — her face, hair, ' +
-    'and appearance become the woman from the SECOND image, wearing her own natural casual clothing. ' +
-    'Photorealistic, single person, matching the scene\'s lighting. Do not add text or captions.';
+    'Composite one clean, photorealistic frame. Take the woman from the SECOND image — her facial identity, ' +
+    'hairstyle, and her outfit/clothing — and place her into the scene from the FIRST image. ' +
+    'KEEP from the FIRST image: the background, room, furniture, wall decor, lighting, camera framing and ' +
+    'distance, her body pose, head angle, and hand positions. ' +
+    'REPLACE using the SECOND image: her face, her hair, and the clothing she is wearing — use the SECOND ' +
+    'woman\'s outfit, do NOT keep the outfit from the first image. ' +
+    'REMOVE any caption text, subtitle bars, on-screen text, watermarks, stickers, or graphic overlays that ' +
+    'were laid on top of the first image (TikTok-style captions). The final frame must contain NO overlaid ' +
+    'text or captions of any kind — just the person in the room. ' +
+    'A single person only, natural lighting consistent with the scene.';
   const body = {
     model: 'google/nano-banana-edit',
     input: {
