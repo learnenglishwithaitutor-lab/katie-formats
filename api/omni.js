@@ -170,6 +170,37 @@ async function readAsset(filename) {
   return readFile(p);
 }
 
+// ── Submit a nano-banana-edit image task (avatar first-frame swap) ──
+// Keeps the reference frame's background/pose/framing, swaps the person to Norah.
+async function submitKieImageTask(refFrameUrl, norahUrl) {
+  const prompt =
+    'Replace the person in the FIRST image with the woman shown in the SECOND image. ' +
+    'Keep the FIRST image exactly as-is otherwise: same background, same setting, same camera framing and distance, ' +
+    'same body pose, same head angle, and same hand positions. Only the person\'s identity changes — her face, hair, ' +
+    'and appearance become the woman from the SECOND image, wearing her own natural casual clothing. ' +
+    'Photorealistic, single person, matching the scene\'s lighting. Do not add text or captions.';
+  const body = {
+    model: 'google/nano-banana-edit',
+    input: {
+      prompt,
+      image_urls: [refFrameUrl, norahUrl],
+      output_format: 'png',
+      image_size: '9:16'
+    }
+  };
+  const res = await fetch(KIE_CREATE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${KIE_TOKEN}` },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`kie.ai image createTask failed (${res.status}): ${await res.text()}`);
+  const data = await res.json();
+  if (data.code && data.code !== 200) throw new Error(`kie.ai image: ${data.msg || 'createTask error'} (code ${data.code})`);
+  const taskId = data?.data?.taskId;
+  if (!taskId) throw new Error(`kie.ai image: no taskId. Response: ${JSON.stringify(data)}`);
+  return taskId;
+}
+
 // ── Submit generation task (image-prompt hack) ────────────────
 async function submitKieTask(promptPngUrl, startFrameUrl, voiceUrl, noVoice) {
   const input = {
@@ -275,7 +306,7 @@ export default async function handler(req, res) {
       if (!dres.ok || !ddata.ok) {
         return res.status(502).json({ error: 'decode service: ' + (ddata.error || dres.status) });
       }
-      return res.status(200).json({ motionBreakdown: ddata.movementBreakdown, frameCount: ddata.frameCount, duration: ddata.duration || 0 });
+      return res.status(200).json({ motionBreakdown: ddata.movementBreakdown, frameCount: ddata.frameCount, duration: ddata.duration || 0, firstFrame: ddata.firstFrame || null });
     } catch (err) {
       return res.status(500).json({ error: 'decode call failed: ' + err.message });
     }
@@ -329,19 +360,60 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=firstframe: swap the reference's opening frame to Norah ──
+  // Body: { firstFrame: <base64 jpg of the reference video's frame 0> }
+  // Returns { imageUrl } — a Norah-ified first frame that keeps the ref's
+  // background/pose/framing. Runs create+poll inline (fits in 60s function).
+  if (action === 'firstframe') {
+    const firstFrame = body.firstFrame; // base64, no data: prefix
+    if (!firstFrame) return res.status(400).json({ error: 'firstFrame required' });
+    if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
+    try {
+      const refBuffer = Buffer.from(firstFrame, 'base64');
+      const norahBuffer = await readAsset('luna_start_frame.png');
+      const [refUrl, norahUrl] = await Promise.all([
+        uploadToKie(refBuffer, 'image/jpeg', 'ref_first_frame.jpg'),
+        uploadToKie(norahBuffer, 'image/png', 'norah_identity.png')
+      ]);
+      const taskId = await submitKieImageTask(refUrl, norahUrl);
+      // Poll inline until the image is ready (nano-banana ~10-30s)
+      let imageUrl = null;
+      for (let i = 0; i < 25; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const { status, videoUrl, failMsg } = await pollKieTask(taskId);
+        if (status === 'success' && videoUrl) { imageUrl = videoUrl; break; }
+        if (status === 'fail') throw new Error(failMsg || 'image generation failed');
+      }
+      if (!imageUrl) throw new Error('image generation timed out');
+      return res.status(200).json({ imageUrl });
+    } catch(err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=generate: upload prompt PNG + Norah assets fresh, submit ──
   if (action === 'generate') {
     const promptPng = body.promptPng; // base64 (no data: prefix)
     const noVoice = body.noVoice === true;
+    const startFrameUrl_in = body.startFrameUrl || null; // per-video Norah frame (optional)
     if (!promptPng) return res.status(400).json({ error: 'promptPng required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
-      // Upload all assets fresh so no kie.ai tempfile URL is ever stale
       const promptBuffer = Buffer.from(promptPng, 'base64');
-      const [startBuffer, voiceBuffer] = await Promise.all([
-        readAsset('luna_start_frame.png'),
-        noVoice ? Promise.resolve(null) : readAsset('norah_new_voice.mp4')
-      ]);
+
+      // Start frame: prefer the per-video Norah frame; re-fetch and re-upload it
+      // fresh under the luna filename so the prompt hint still resolves and no
+      // kie tempfile URL is stale. Any failure falls back to the bundled avatar.
+      let startBuffer = null;
+      if (startFrameUrl_in) {
+        try {
+          const fr = await fetch(startFrameUrl_in);
+          if (fr.ok) startBuffer = Buffer.from(await fr.arrayBuffer());
+        } catch (e) { /* fall back below */ }
+      }
+      if (!startBuffer) startBuffer = await readAsset('luna_start_frame.png');
+
+      const voiceBuffer = noVoice ? null : await readAsset('norah_new_voice.mp4');
 
       const uploads = [
         uploadToKie(promptBuffer, 'image/png', 'prompt.png'),

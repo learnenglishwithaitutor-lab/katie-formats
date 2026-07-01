@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v43 -->
+  <!-- BUST-v44 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -747,6 +747,23 @@ async function generateVideos() {
       motionBreakdown = ad.motionBreakdown;
       duration = ad.duration || 0;
 
+      // 1a-ii. Generate the Norah-swapped first frame (keeps ref background/pose,
+      //        swaps the person to Norah). Per video, shared by all its clips.
+      //        Non-fatal: on failure we fall back to the bundled avatar.
+      let norahFrameUrl = null;
+      if (ad.firstFrame) {
+        setStatus(`Creating Norah first frame ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+        try {
+          const fr = await fetch('/api/omni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'firstframe', firstFrame: ad.firstFrame })
+          });
+          const fd = await fr.json();
+          if (fr.ok && fd.imageUrl) norahFrameUrl = fd.imageUrl;
+        } catch (e) { /* fall back to bundled avatar */ }
+      }
+
       // 1b. Decide clip count: <=10s → 1, 10-25s → 2, >25s → 3
       const numClips = duration > 25 ? 3 : (duration > 10 ? 2 : 1);
       const scriptParts = splitScriptIntoClips(scriptText, numClips);
@@ -771,7 +788,9 @@ async function generateVideos() {
           scriptObj: s,
           promptText: pd.promptText,
           clipLabel: numClips > 1 ? `Clip ${c+1} of ${numClips}` : null,
-          videoIndex: i
+          videoIndex: i,
+          norahFrameUrl,
+          refFirstFrame: ad.firstFrame || null
         });
       }
     }
@@ -814,6 +833,13 @@ function showPromptReview(prepared, savedApprovedIdx) {
               <span style="font-size:13px;font-weight:600;">@${p.scriptObj.format.author}${p.clipLabel ? ` · <span style="color:var(--accent,#6C5CE7);">${p.clipLabel}</span>` : ''}</span>
             </div>
             <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;overflow:visible;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
+            <div style="margin:0 0 10px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Norah first frame ${p.norahFrameUrl ? '(start image for this video)' : '— using default avatar (swap unavailable)'}</div>
+              ${p.norahFrameUrl
+                ? `<img src="${p.norahFrameUrl}" style="width:96px;border-radius:8px;border:0.5px solid var(--border);display:block;margin-bottom:6px;" />`
+                : ''}
+              <button onclick="regenerateFirstFrame(${i})" class="btn-secondary" style="font-size:12px;padding:8px;">↻ Regenerate first frame</button>
+            </div>
             <button onclick="togglePromptApprove(${i})" class="btn-secondary" style="${approved.has(i)?'border-color:var(--approve);color:var(--approve);':'border-color:var(--reject);color:var(--reject);'}">
               ${approved.has(i) ? '✓ Will generate — tap to skip' : '✕ Skipped — tap to include'}
             </button>
@@ -834,6 +860,36 @@ function togglePromptApprove(i) {
   if (set.has(i)) set.delete(i); else set.add(i);
   saveApprovedPromptIdx(set);
   window.__renderPromptReview();
+}
+
+// Regenerate the Norah first frame for the video that clip `i` belongs to,
+// then apply the new frame URL to every clip of that same video.
+async function regenerateFirstFrame(i) {
+  const prepared = window.__preparedPrompts || [];
+  const target = prepared[i];
+  if (!target) return;
+  const ref = target.refFirstFrame;
+  if (!ref) { alert('No source frame available to regenerate from. Re-analyze from scratch to enable this.'); return; }
+  const vIdx = target.videoIndex;
+
+  const btns = document.querySelectorAll(`button[onclick="regenerateFirstFrame(${i})"]`);
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Regenerating…'; });
+  try {
+    const fr = await fetch('/api/omni', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'firstframe', firstFrame: ref })
+    });
+    const fd = await fr.json();
+    if (!fr.ok || !fd.imageUrl) throw new Error(fd.error || 'no image returned');
+    // Apply to every clip of this video
+    prepared.forEach(p => { if (p.videoIndex === vIdx) p.norahFrameUrl = fd.imageUrl; });
+    savePreparedPrompts(prepared);
+    window.__renderPromptReview();
+  } catch (e) {
+    alert('First-frame regeneration failed: ' + (e.message || e));
+    btns.forEach(b => { b.disabled = false; b.textContent = '↻ Regenerate first frame'; });
+  }
 }
 
 // Discard cached prompts/analysis and rebuild from scratch (e.g. after a prompt-logic change)
@@ -883,7 +939,7 @@ async function generateApprovedPrompts() {
           const res = await fetch('/api/omni', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'generate', promptPng })
+            body: JSON.stringify({ action: 'generate', promptPng, startFrameUrl: p.norahFrameUrl || null })
           });
           const data = await res.json();
           if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
@@ -894,10 +950,10 @@ async function generateApprovedPrompts() {
       }
       if (!taskId) {
         // All 3 attempts failed — mark this clip as failed and continue to the next
-        results.push({ taskId: null, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'failed', video_url: null, failMsg: (submitErr?.message || 'Submit failed after 2 retries') });
+        results.push({ taskId: null, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'failed', video_url: null, failMsg: (submitErr?.message || 'Submit failed after 2 retries'), norahFrameUrl: p.norahFrameUrl || null });
         continue;
       }
-      results.push({ taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'processing', video_url: null });
+      results.push({ taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'processing', video_url: null, norahFrameUrl: p.norahFrameUrl || null });
     }
     generatedVideos = results;
     await pollGeneratedVideos(setStatus);
@@ -1182,7 +1238,7 @@ async function regenerateOne(idx) {
     setStatus('Submitting…', '@' + (item.scriptObj?.format?.author || ''));
     const res = await fetchRetry('/api/omni', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', promptPng })
+      body: JSON.stringify({ action: 'generate', promptPng, startFrameUrl: item.norahFrameUrl || null })
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || 'failed'}`);
@@ -1454,7 +1510,10 @@ function scriptsFingerprint(scripts) {
   return (scripts || []).map(s => (s.format?.author || '') + '|' + (s.script || s.text || s.katie_script || '')).join('::');
 }
 function savePreparedPrompts(prepared) {
-  localStorage.setItem('kf_prepared_prompts', JSON.stringify(prepared));
+  // Strip the large base64 ref frame before persisting (it's kept in memory on
+  // window.__preparedPrompts for regeneration; storing it would blow the quota).
+  const slim = prepared.map(p => { const { refFirstFrame, ...rest } = p; return rest; });
+  localStorage.setItem('kf_prepared_prompts', JSON.stringify(slim));
   localStorage.setItem('kf_prepared_prompts_fp', scriptsFingerprint(approvedScripts));
 }
 function loadPreparedPrompts() {
