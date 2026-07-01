@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v40 -->
+  <!-- BUST-v41 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v40';
+const APP_VERSION = 'v41';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -938,8 +938,14 @@ function buildDriveGroups() {
   const groups = Object.values(groupsMap).map(clips => {
     clips.sort((a, b) => (a.clipLabel || '').localeCompare(b.clipLabel || ''));
     const author = clips[0]?.scriptObj?.format?.author || 'video';
+    // Combine all clip prompts for this video into one text blob (with headers)
+    const promptsText = clips.map((c, i) => {
+      const label = c.clipLabel || `Clip ${i + 1}`;
+      return `===== ${label} =====\n\n${c.promptText || '(no prompt stored)'}`;
+    }).join('\n\n\n');
     return {
       author,
+      promptsText,
       clips: clips.map((c, i) => ({
         url: c.video_url,
         filename: `katie_${author}_${(c.clipLabel || ('clip' + (i + 1))).replace(/\s+/g, '')}.mp4`
@@ -1134,17 +1140,26 @@ async function regenerateOne(idx) {
     ${headerHTML(pulled, null, true, 'Generate videos')}
     <div class="loading-screen">
       <div class="loading-spinner"></div>
-      <div class="loading-title" id="loading-title">Regenerating clip...</div>
-      <div class="loading-sub" id="loading-sub">@${item.scriptObj?.format?.author || ''}</div>
+      <div class="loading-title" id="gen-status">Regenerating clip...</div>
+      <div class="loading-sub" id="gen-sub">@${item.scriptObj?.format?.author || ''}</div>
     </div>`;
   const setStatus = (t, s='') => {
-    const a=document.getElementById('loading-title'), b=document.getElementById('loading-sub');
+    const a=document.getElementById('gen-status'), b=document.getElementById('gen-sub');
     if(a)a.textContent=t; if(b)b.textContent=s;
+  };
+  // Fetch with a couple of retries so a flaky mobile connection doesn't hard-fail
+  const fetchRetry = async (url, opts, tries=3) => {
+    let lastErr;
+    for (let t=0; t<tries; t++) {
+      try { return await fetch(url, opts); }
+      catch(e) { lastErr = e; setStatus('Network hiccup — retrying…', `attempt ${t+2}/${tries}`); await new Promise(r=>setTimeout(r,1500)); }
+    }
+    throw lastErr;
   };
   try {
     const promptPng = renderPromptToPng(item.promptText);
-    setStatus('Submitting...', '@' + (item.scriptObj?.format?.author || ''));
-    const res = await fetch('/api/omni', {
+    setStatus('Submitting…', '@' + (item.scriptObj?.format?.author || ''));
+    const res = await fetchRetry('/api/omni', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'generate', promptPng })
     });
@@ -1154,8 +1169,18 @@ async function regenerateOne(idx) {
     item.taskId = data.taskId; item.status = 'processing'; item.video_url = null; item.failMsg = null;
     await pollGeneratedVideos(setStatus);
   } catch (err) {
-    alert('Regenerate failed: ' + err.message);
-    showStage3Done();
+    const msg = /load failed|fetch|network/i.test(err.message)
+      ? 'Network error — check your connection and try again.'
+      : err.message;
+    document.getElementById('app').innerHTML = `
+      ${headerHTML(pulled, null, true, 'Generate videos')}
+      <div class="loading-screen">
+        <div style="font-size:40px;margin-bottom:16px;">⚠️</div>
+        <div style="font-weight:600;margin-bottom:8px;">Regenerate failed</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:24px;max-width:300px;text-align:center;">${msg}</div>
+        <button class="btn-primary" onclick="regenerateOne(${idx})">↻ Try again</button>
+        <button class="btn-secondary" onclick="showStage3Done()">← Back to clips</button>
+      </div>`;
   }
 }
 // ── Send to Sheet ──────────────────────────────────────────────
@@ -1388,7 +1413,10 @@ function loadApprovedScripts() {
 function saveGeneratedVideos(videos) {
   localStorage.setItem('kf_generated_videos', JSON.stringify(videos));
   localStorage.setItem('kf_generated_videos_date', new Date().toISOString());
-  localStorage.setItem('kf_generated_videos_fp', scriptsFingerprint(approvedScripts));
+  // Keep the fingerprint tied to the approved scripts; if that array is empty
+  // (e.g. regenerating from a cached done screen), don't overwrite a good fp.
+  const fp = scriptsFingerprint(approvedScripts);
+  if (fp) localStorage.setItem('kf_generated_videos_fp', fp);
 }
 function loadGeneratedVideos() {
   try {

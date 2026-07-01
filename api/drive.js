@@ -49,8 +49,17 @@ export default async function handler(req, res) {
         // Single clip -> upload directly into the top-level folder, no subfolder
         const r = await uploadClipToDrive(accessToken, clips[0], folderId || null);
         results.push(r);
+        // Prompt text alongside it (single clip: name it after the author)
+        if (group.promptsText) {
+          try {
+            const up = await driveUploadText(accessToken, group.promptsText, `katie_${author}_prompt.txt`, folderId || null);
+            results.push({ filename: `katie_${author}_prompt.txt`, ok: true, fileId: up.id, link: up.webViewLink });
+          } catch (e) {
+            results.push({ filename: `katie_${author}_prompt.txt`, ok: false, error: 'prompt upload failed: ' + e.message });
+          }
+        }
       } else {
-        // Multiple clips -> subfolder containing all clips + the stitched video
+        // Multiple clips -> subfolder containing all clips + the stitched video + prompts
         let subfolderId = null;
         try {
           subfolderId = await driveCreateFolder(accessToken, `katie_${author}_${stamp()}`, folderId || null);
@@ -63,6 +72,16 @@ export default async function handler(req, res) {
         for (const clip of clips) {
           const r = await uploadClipToDrive(accessToken, clip, subfolderId);
           results.push(r);
+        }
+
+        // Combined prompts text file into the subfolder
+        if (group.promptsText) {
+          try {
+            const up = await driveUploadText(accessToken, group.promptsText, `katie_${author}_prompts.txt`, subfolderId);
+            results.push({ filename: `katie_${author}_prompts.txt`, ok: true, fileId: up.id, link: up.webViewLink });
+          } catch (e) {
+            results.push({ filename: `katie_${author}_prompts.txt`, ok: false, error: 'prompt upload failed: ' + e.message });
+          }
         }
 
         // Stitch server-side (decode service) and upload the result into the same subfolder
@@ -121,13 +140,21 @@ async function uploadClipToDrive(accessToken, clip, parentId) {
   }
 }
 
+async function driveUploadText(accessToken, text, filename, parentId) {
+  return driveUploadRaw(accessToken, Buffer.from(text, 'utf8'), filename, parentId, 'text/plain');
+}
+
 async function driveUploadBuffer(accessToken, buffer, filename, parentId) {
+  return driveUploadRaw(accessToken, buffer, filename, parentId, 'video/mp4');
+}
+
+async function driveUploadRaw(accessToken, buffer, filename, parentId, contentType) {
   const metadata = { name: filename };
   if (parentId) metadata.parents = [parentId];
 
   const boundary = 'katieboundary' + Date.now() + Math.random().toString(36).slice(2);
   const multipartBody = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: video/mp4\r\n\r\n`, 'utf8'),
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`, 'utf8'),
     buffer,
     Buffer.from(`\r\n--${boundary}--`, 'utf8')
   ]);
