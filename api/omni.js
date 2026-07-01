@@ -172,18 +172,20 @@ async function readAsset(filename) {
 
 // ── Submit a nano-banana-edit image task (avatar first-frame swap) ──
 // Keeps the reference frame's background/pose/framing, swaps the person to Norah.
-async function submitKieImageTask(refFrameUrl, norahUrl) {
+async function submitKieImageTask(refFrameUrl, norahUrl, outfit) {
+  const wearing = outfit && outfit.trim() ? outfit.trim() : 'a plain casual top';
   const prompt =
-    'Composite one clean, photorealistic frame. Take the woman from the SECOND image — her facial identity, ' +
-    'hairstyle, and her outfit/clothing — and place her into the scene from the FIRST image. ' +
-    'KEEP from the FIRST image: the background, room, furniture, wall decor, lighting, camera framing and ' +
-    'distance, her body pose, head angle, and hand positions. ' +
-    'REPLACE using the SECOND image: her face, her hair, and the clothing she is wearing — use the SECOND ' +
-    'woman\'s outfit, do NOT keep the outfit from the first image. ' +
-    'REMOVE any caption text, subtitle bars, on-screen text, watermarks, stickers, or graphic overlays that ' +
-    'were laid on top of the first image (TikTok-style captions). The final frame must contain NO overlaid ' +
-    'text or captions of any kind — just the person in the room. ' +
-    'A single person only, natural lighting consistent with the scene.';
+    'Composite one clean, photorealistic frame of a single person. ' +
+    'Use the SECOND image ONLY as the reference for the woman\'s face, facial features, and hairstyle — her identity. ' +
+    'Place her into the scene from the FIRST image: keep the FIRST image\'s background, room, furniture, wall decor, ' +
+    'lighting, camera framing and distance, her body pose, head angle, and hand positions. ' +
+    'Dress her in: ' + wearing + '. Render this outfit naturally and completely on her body. ' +
+    'Do NOT copy or keep the clothing from the first image, and do NOT copy the clothing from the second image — ' +
+    'her clothing must be exactly the outfit described above, cleanly and fully replacing whatever either image shows ' +
+    'her wearing (no layering or blending of garments). ' +
+    'REMOVE any caption text, subtitle bars, on-screen text, watermarks, stickers, or graphic overlays that were laid ' +
+    'on top of the first image (TikTok-style captions). The final frame must contain NO overlaid text or captions — ' +
+    'just the person in the room. A single person only, natural lighting consistent with the scene.';
   const body = {
     model: 'google/nano-banana-edit',
     input: {
@@ -371,6 +373,7 @@ export default async function handler(req, res) {
   // (No inline poll — keeps us well under the function time limit.)
   if (action === 'firstframe') {
     const firstFrame = body.firstFrame; // base64, no data: prefix
+    const outfit = body.outfit || null;
     if (!firstFrame) return res.status(400).json({ error: 'firstFrame required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
@@ -380,7 +383,7 @@ export default async function handler(req, res) {
         uploadToKie(refBuffer, 'image/jpeg', 'ref_first_frame.jpg'),
         uploadToKie(norahBuffer, 'image/png', 'norah_identity.png')
       ]);
-      const taskId = await submitKieImageTask(refUrl, norahUrl);
+      const taskId = await submitKieImageTask(refUrl, norahUrl, outfit);
       return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });

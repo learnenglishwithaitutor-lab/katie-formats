@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v46 -->
+  <!-- BUST-v47 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v46';
+const APP_VERSION = 'v47';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -672,14 +672,37 @@ function isPolicyReason(msg) {
   return /policy|sensitive|nsfw|violat|inappropriate|flagged|prohibited|not allowed|safety|blocked/i.test(String(msg || ''));
 }
 
+// Varied, brand-safe casual outfits so Norah isn't in the same top every video.
+// Upper-body focused (waist-up UGC framing), cozy-bedroom appropriate, modest.
+const NORAH_OUTFITS = [
+  'a cream oversized knit sweater',
+  'a white ribbed tank top',
+  'a light blue denim jacket over a plain white tee',
+  'a sage green pullover hoodie',
+  'a soft beige cardigan over a white top',
+  'a pastel pink crewneck sweatshirt',
+  'a black fitted long-sleeve top',
+  'a blue-and-white striped long-sleeve shirt',
+  'a mustard-yellow knit jumper',
+  'a lavender relaxed-fit t-shirt',
+  'a white linen button-up shirt',
+  'a charcoal-grey zip-up hoodie',
+  'a terracotta ribbed long-sleeve top',
+  'a light olive utility overshirt over a white tee'
+];
+function pickOutfit(exclude) {
+  const pool = NORAH_OUTFITS.filter(o => o !== exclude);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // Submit the Norah first-frame swap, then poll status until the image is ready.
 // Returns the image URL, or null if it fails/times out (caller falls back to
 // the bundled avatar). ~90s ceiling — well beyond nano-banana's usual 10-30s.
-async function makeNorahFrame(refFrameB64) {
+async function makeNorahFrame(refFrameB64, outfit) {
   const sr = await fetch('/api/omni', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'firstframe', firstFrame: refFrameB64 })
+    body: JSON.stringify({ action: 'firstframe', firstFrame: refFrameB64, outfit: outfit || null })
   });
   const sd = await sr.json();
   if (!sr.ok || !sd.taskId) throw new Error(sd.error || 'firstframe submit failed');
@@ -789,10 +812,11 @@ async function generateVideos() {
       //        Non-fatal: on failure we fall back to the bundled avatar.
       let norahFrameUrl = null;
       let frameErr = null;
+      let norahOutfit = pickOutfit();
       if (ad.firstFrame) {
-        setStatus(`Creating Norah first frame ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
+        setStatus(`Creating Norah first frame ${i+1} of ${approvedScripts.length}...`, norahOutfit);
         try {
-          norahFrameUrl = await makeNorahFrame(ad.firstFrame);
+          norahFrameUrl = await makeNorahFrame(ad.firstFrame, norahOutfit);
         } catch (e) {
           frameErr = { rejected: !!e.rejected || isPolicyReason(e.message), msg: (e.message || String(e)) };
         }
@@ -826,6 +850,7 @@ async function generateVideos() {
           clipLabel: numClips > 1 ? `Clip ${c+1} of ${numClips}` : null,
           videoIndex: i,
           norahFrameUrl,
+          norahOutfit,
           frameErr,
           refFirstFrame: ad.firstFrame || null
         });
@@ -872,7 +897,7 @@ function showPromptReview(prepared, savedApprovedIdx) {
             <pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px;line-height:1.45;color:#333;background:#FAFAFA;border-radius:8px;padding:10px;margin:0 0 10px;overflow:visible;">${(p.promptText||'').replace(/</g,'&lt;')}</pre>
             <div style="margin:0 0 10px;">
               ${p.norahFrameUrl
-                ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Norah first frame (start image for this video)</div>
+                ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Norah first frame (start image for this video)${p.norahOutfit ? ` · <span style="color:var(--accent,#6C5CE7);">${p.norahOutfit}</span>` : ''}</div>
                    <img src="${p.norahFrameUrl}" style="width:96px;border-radius:8px;border:0.5px solid var(--border);display:block;margin-bottom:6px;" />`
                 : `<div style="font-size:11px;color:var(--reject);margin-bottom:2px;font-weight:600;">
                      ${p.frameErr && p.frameErr.rejected ? '⚠ Swap rejected by content policy' : '⚠ Swap failed'} — using default avatar
@@ -911,18 +936,19 @@ async function regenerateFirstFrame(i) {
   const ref = target.refFirstFrame;
   if (!ref) { alert('No source frame available to regenerate from. Re-analyze from scratch to enable this.'); return; }
   const vIdx = target.videoIndex;
+  const newOutfit = pickOutfit(target.norahOutfit); // a different outfit than current
 
   const btns = document.querySelectorAll(`button[onclick="regenerateFirstFrame(${i})"]`);
   btns.forEach(b => { b.disabled = true; b.textContent = 'Regenerating…'; });
   try {
-    const imageUrl = await makeNorahFrame(ref);
+    const imageUrl = await makeNorahFrame(ref, newOutfit);
     // Apply to every clip of this video
-    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = imageUrl; p.frameErr = null; } });
+    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = imageUrl; p.norahOutfit = newOutfit; p.frameErr = null; } });
     savePreparedPrompts(prepared);
     window.__renderPromptReview();
   } catch (e) {
     const frameErr = { rejected: !!e.rejected || isPolicyReason(e.message), msg: (e.message || String(e)) };
-    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = null; p.frameErr = frameErr; } });
+    prepared.forEach(p => { if (p.videoIndex === vIdx) { p.norahFrameUrl = null; p.norahOutfit = newOutfit; p.frameErr = frameErr; } });
     savePreparedPrompts(prepared);
     window.__renderPromptReview();
   }
