@@ -141,6 +141,25 @@ Rules:
   return data.content?.[0]?.text || '';
 }
 
+// ── Simple Omni prompt builder (SEPARATE from the detailed one above) ──
+// No setting description, no scripted movement breakdown — the Norah first
+// frame carries the scene. Just the spoken line, the voice reference, and one
+// light gesture cue. Pure template: no Claude call, no motion breakdown needed.
+function generateSimpleOmniPrompt(script, clipInfo) {
+  const continuity = (clipInfo && clipInfo.total > 1)
+    ? '\nKeep her framing, distance, and energy consistent — this is one part of a longer continuous video.'
+    : '';
+  return [
+    'Generate a video of this girl saying the following, clearly and naturally:',
+    `"${(script || '').trim()}"`,
+    '',
+    'Use the video attached as reference for her voice (norah_new_voice.mp4). Make sure she is naturally expressive when she is speaking.',
+    '',
+    'Use natural, expressive gestures throughout.' + continuity,
+    'Format: Vertical 9:16, phone-camera UGC aesthetic, no captions.'
+  ].join('\n');
+}
+
 // ── Upload a buffer to kie.ai, return hosted URL ──────────────
 // filename is preserved in the upload path so the image-prompt hack
 // can reference files by name (prompt.png, luna_start_frame.png, etc).
@@ -353,14 +372,20 @@ export default async function handler(req, res) {
   // ── action=prompt: Claude generates the prompt text (for the PNG) ──
   if (action === 'prompt') {
     const script = body.script;
+    const style = body.style === 'simple' ? 'simple' : 'detailed';
     const thumbnail = body.thumbnail || null;
     const motionBreakdown = body.motionBreakdown || null;
     const clipInfo = body.clipInfo || null;
     if (!script) return res.status(400).json({ error: 'script required' });
-    if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
     try {
-      const promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown, clipInfo);
-      if (!promptText) throw new Error('Claude returned empty prompt');
+      let promptText;
+      if (style === 'simple') {
+        promptText = generateSimpleOmniPrompt(script, clipInfo);
+      } else {
+        if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+        promptText = await generateOmniPrompt(script, thumbnail, motionBreakdown, clipInfo);
+      }
+      if (!promptText) throw new Error('empty prompt');
       return res.status(200).json({ promptText });
     } catch(err) {
       return res.status(500).json({ error: err.message });

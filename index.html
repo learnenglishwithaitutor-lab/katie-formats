@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v47 -->
+  <!-- BUST-v48 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v47';
+const APP_VERSION = 'v48';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -578,6 +578,14 @@ function showStage2Done() {
         <div class="approved-list">
           ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">${s.script.slice(0,50)}...</span></div>`).join('')}
         </div>
+        <div style="margin:4px 0 14px;text-align:center;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Prompt style</div>
+          <div style="display:inline-flex;border:0.5px solid var(--border);border-radius:10px;overflow:hidden;">
+            <button onclick="setPromptStyle('detailed')" style="padding:8px 18px;font-size:13px;border:none;cursor:pointer;font-family:inherit;${promptStyle()==='detailed'?'background:var(--accent,#6C5CE7);color:#fff;font-weight:600;':'background:transparent;color:var(--muted);'}">Detailed</button>
+            <button onclick="setPromptStyle('simple')" style="padding:8px 18px;font-size:13px;border:none;cursor:pointer;font-family:inherit;${promptStyle()==='simple'?'background:var(--accent,#6C5CE7);color:#fff;font-weight:600;':'background:transparent;color:var(--muted);'}">Simple</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;max-width:280px;margin-left:auto;margin-right:auto;">${promptStyle()==='simple' ? 'Just the spoken line + a light gesture cue. The Norah first frame sets the scene.' : 'Full movement breakdown + setting, matched to the reference.'}</div>
+        </div>
         <button class="btn-primary" onclick="safeGenerate()" id="generate-btn">Generate videos →</button>
       ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No scripts approved.</p>'}
       <button class="btn-secondary" onclick="reviewScriptsAgain()">Review again</button>
@@ -593,6 +601,13 @@ function reviewScriptsAgain() {
 }
 
 // ── Stage 3: Generate Omni videos via kie.ai ──────────────────
+// Prompt style toggle: 'detailed' (full movement+setting) or 'simple'
+// (spoken line + one gesture cue; the Norah first frame carries the scene).
+function promptStyle() { return localStorage.getItem('kf_prompt_style') === 'simple' ? 'simple' : 'detailed'; }
+function setPromptStyle(v) {
+  localStorage.setItem('kf_prompt_style', v === 'simple' ? 'simple' : 'detailed');
+  showStage2Done(); // re-render so the toggle reflects the choice
+}
 let generatedVideos = [];
 
 // kie.ai status values that mean "still running"
@@ -836,6 +851,7 @@ async function generateVideos() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'prompt',
+            style: promptStyle(),
             script: scriptParts[c],
             thumbnail: s.format?.thumbnail || null,
             motionBreakdown,
