@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v44 -->
+  <!-- BUST-v45 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -667,6 +667,33 @@ function splitScriptIntoClips(script, numClips) {
   return parts.filter(p => p.trim());
 }
 
+// Submit the Norah first-frame swap, then poll status until the image is ready.
+// Returns the image URL, or null if it fails/times out (caller falls back to
+// the bundled avatar). ~90s ceiling — well beyond nano-banana's usual 10-30s.
+async function makeNorahFrame(refFrameB64) {
+  const sr = await fetch('/api/omni', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'firstframe', firstFrame: refFrameB64 })
+  });
+  const sd = await sr.json();
+  if (!sr.ok || !sd.taskId) throw new Error(sd.error || 'firstframe submit failed');
+
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const pr = await fetch(`/api/omni?action=status&taskId=${sd.taskId}`);
+      const pd = await pr.json();
+      if (pd.status === 'success' && pd.videoUrl) return pd.videoUrl; // image URL
+      if (pd.status === 'fail') throw new Error(pd.failMsg || 'swap failed');
+    } catch (e) {
+      if (/swap failed/.test(e.message)) throw e; // real rejection — stop
+      /* transient poll error — keep trying */
+    }
+  }
+  throw new Error('first-frame swap timed out');
+}
+
 async function safeGenerate() {
   const btn = document.getElementById('generate-btn');
   if (btn) { btn.textContent = 'Starting…'; }
@@ -754,13 +781,7 @@ async function generateVideos() {
       if (ad.firstFrame) {
         setStatus(`Creating Norah first frame ${i+1} of ${approvedScripts.length}...`, '@' + s.format.author);
         try {
-          const fr = await fetch('/api/omni', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'firstframe', firstFrame: ad.firstFrame })
-          });
-          const fd = await fr.json();
-          if (fr.ok && fd.imageUrl) norahFrameUrl = fd.imageUrl;
+          norahFrameUrl = await makeNorahFrame(ad.firstFrame);
         } catch (e) { /* fall back to bundled avatar */ }
       }
 
@@ -875,15 +896,9 @@ async function regenerateFirstFrame(i) {
   const btns = document.querySelectorAll(`button[onclick="regenerateFirstFrame(${i})"]`);
   btns.forEach(b => { b.disabled = true; b.textContent = 'Regenerating…'; });
   try {
-    const fr = await fetch('/api/omni', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'firstframe', firstFrame: ref })
-    });
-    const fd = await fr.json();
-    if (!fr.ok || !fd.imageUrl) throw new Error(fd.error || 'no image returned');
+    const imageUrl = await makeNorahFrame(ref);
     // Apply to every clip of this video
-    prepared.forEach(p => { if (p.videoIndex === vIdx) p.norahFrameUrl = fd.imageUrl; });
+    prepared.forEach(p => { if (p.videoIndex === vIdx) p.norahFrameUrl = imageUrl; });
     savePreparedPrompts(prepared);
     window.__renderPromptReview();
   } catch (e) {

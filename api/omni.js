@@ -360,10 +360,10 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── action=firstframe: swap the reference's opening frame to Norah ──
+  // ── action=firstframe: submit the Norah swap, return taskId (poll separately) ──
   // Body: { firstFrame: <base64 jpg of the reference video's frame 0> }
-  // Returns { imageUrl } — a Norah-ified first frame that keeps the ref's
-  // background/pose/framing. Runs create+poll inline (fits in 60s function).
+  // Returns { taskId }. The app polls action=status until the image is ready.
+  // (No inline poll — keeps us well under the function time limit.)
   if (action === 'firstframe') {
     const firstFrame = body.firstFrame; // base64, no data: prefix
     if (!firstFrame) return res.status(400).json({ error: 'firstFrame required' });
@@ -376,16 +376,7 @@ export default async function handler(req, res) {
         uploadToKie(norahBuffer, 'image/png', 'norah_identity.png')
       ]);
       const taskId = await submitKieImageTask(refUrl, norahUrl);
-      // Poll inline until the image is ready (nano-banana ~10-30s)
-      let imageUrl = null;
-      for (let i = 0; i < 25; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const { status, videoUrl, failMsg } = await pollKieTask(taskId);
-        if (status === 'success' && videoUrl) { imageUrl = videoUrl; break; }
-        if (status === 'fail') throw new Error(failMsg || 'image generation failed');
-      }
-      if (!imageUrl) throw new Error('image generation timed out');
-      return res.status(200).json({ imageUrl });
+      return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
     }
