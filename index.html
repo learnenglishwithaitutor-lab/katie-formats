@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v39 -->
+  <!-- BUST-v40 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v40';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1574,7 +1574,20 @@ function startStage3() {
 }
 
 // ── Boot ───────────────────────────────────────────────────────
-showHome();
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('gdrive_connected') === '1') {
+    history.replaceState(null, '', window.location.pathname); // clean the URL
+    const cachedVideos = loadGeneratedVideos();
+    if (cachedVideos && cachedVideos.length) {
+      generatedVideos = cachedVideos;
+      showStage3Done();
+      setTimeout(() => alert('Google connected! Tap "Send to Drive" again to continue — it\'ll ask for your folder next.'), 300);
+      return;
+    }
+  }
+  showHome();
+})();
 </script>
 </body>
 </html>

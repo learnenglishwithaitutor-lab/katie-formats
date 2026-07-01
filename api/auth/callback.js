@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       <script>
         localStorage.setItem('kf_google_refresh_token', ${JSON.stringify(tokenData.refresh_token)});
         localStorage.setItem('kf_google_connected_at', new Date().toISOString());
-        window.location.href = '/';
+        window.location.href = '/?gdrive_connected=1';
       </script>
       Connected! Redirecting…
     </body></html>`);
