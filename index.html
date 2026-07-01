@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v42 -->
+  <!-- BUST-v43 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v42';
+const APP_VERSION = 'v43';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -870,15 +870,34 @@ async function generateApprovedPrompts() {
       setStatus(`Rendering ${i+1} of ${toGen.length}...`, '@' + p.scriptObj.format.author);
       const promptPng = renderPromptToPng(p.promptText);
 
-      setStatus(`Submitting ${i+1} of ${toGen.length}...`, '@' + p.scriptObj.format.author);
-      const res = await fetch('/api/omni', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', promptPng })
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
-      results.push({ taskId: data.taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'processing', video_url: null });
+      // Submit to kie.ai — up to 3 attempts (original + 2 auto-retries)
+      let taskId = null, submitErr = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          setStatus(`Submitting ${i+1} of ${toGen.length}...`, `Retry ${attempt}/2 · @${p.scriptObj.format.author}`);
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          setStatus(`Submitting ${i+1} of ${toGen.length}...`, '@' + p.scriptObj.format.author);
+        }
+        try {
+          const res = await fetch('/api/omni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate', promptPng })
+          });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(`Omni (${res.status}): ${data.error || JSON.stringify(data)}`);
+          taskId = data.taskId;
+          submitErr = null;
+          break;
+        } catch (e) { submitErr = e; }
+      }
+      if (!taskId) {
+        // All 3 attempts failed — mark this clip as failed and continue to the next
+        results.push({ taskId: null, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'failed', video_url: null, failMsg: (submitErr?.message || 'Submit failed after 2 retries') });
+        continue;
+      }
+      results.push({ taskId, promptText: p.promptText, scriptObj: p.scriptObj, clipLabel: p.clipLabel || null, videoIndex: p.videoIndex, status: 'processing', video_url: null });
     }
     generatedVideos = results;
     await pollGeneratedVideos(setStatus);
