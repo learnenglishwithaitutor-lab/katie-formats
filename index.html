@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Katie Formats</title>
-  <!-- BUST-v38 -->
+  <!-- BUST-v39 -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -166,7 +166,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v38';
+const APP_VERSION = 'v39';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -925,6 +925,32 @@ async function pollGeneratedVideos(setStatus) {
   showStage3Done();
 }
 
+// Groups completed clips by source video and computes what a Drive send will
+// actually upload (clips + stitched copy for multi-clip videos) — shared by
+// the button label (accurate preview) and sendAllToDrive (the real send).
+function buildDriveGroups() {
+  const groupsMap = {};
+  generatedVideos.forEach((v, idx) => {
+    if (v.status !== 'completed' || !v.video_url) return;
+    const key = (v.videoIndex !== undefined && v.videoIndex !== null) ? v.videoIndex : `solo_${idx}`;
+    (groupsMap[key] = groupsMap[key] || []).push(v);
+  });
+  const groups = Object.values(groupsMap).map(clips => {
+    clips.sort((a, b) => (a.clipLabel || '').localeCompare(b.clipLabel || ''));
+    const author = clips[0]?.scriptObj?.format?.author || 'video';
+    return {
+      author,
+      clips: clips.map((c, i) => ({
+        url: c.video_url,
+        filename: `katie_${author}_${(c.clipLabel || ('clip' + (i + 1))).replace(/\s+/g, '')}.mp4`
+      }))
+    };
+  });
+  const multiClipGroups = groups.filter(g => g.clips.length >= 2).length;
+  const totalFiles = groups.reduce((n, g) => n + g.clips.length + (g.clips.length >= 2 ? 1 : 0), 0);
+  return { groups, multiClipGroups, totalFiles };
+}
+
 function showStage3Done() {
   const pulled = localStorage.getItem('kf_pulled');
   const completed = generatedVideos.filter(v => v.status === 'completed');
@@ -968,6 +994,7 @@ function showStage3Done() {
   }).join('');
 
   const driveConnected = !!localStorage.getItem('kf_google_refresh_token');
+  const { multiClipGroups, totalFiles } = buildDriveGroups();
 
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Generate videos')}
@@ -982,9 +1009,9 @@ function showStage3Done() {
       <div class="video-results" style="width:100%;">
         ${groupHTML}
       </div>
-      ${completed.length > 0 ? `
+      ${totalFiles > 0 ? `
       <button class="btn-primary" onclick="sendAllToDrive()" style="margin-bottom:8px;">
-        ☁️ Send all ${completed.length} video${completed.length!==1?'s':''} to Drive${driveConnected ? '' : ' (connect)'}
+        ☁️ Send ${totalFiles} file${totalFiles !== 1 ? 's' : ''} to Drive${multiClipGroups ? ` (${completed.length} clip${completed.length !== 1 ? 's' : ''} + ${multiClipGroups} stitched)` : ''}${driveConnected ? '' : ' — connect'}
       </button>` : ''}
       <button class="btn-secondary" onclick="regenerateVideos()">Regenerate all</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
@@ -1012,29 +1039,10 @@ async function sendAllToDrive() {
     localStorage.setItem('kf_drive_folder_id', folderId);
   }
 
-  // Group completed clips by their source video (videoIndex) — same grouping
-  // used on the done screen, so stitching/subfolders match what's shown there.
-  const groupsMap = {};
-  generatedVideos.forEach((v, idx) => {
-    if (v.status !== 'completed' || !v.video_url) return;
-    const key = (v.videoIndex !== undefined && v.videoIndex !== null) ? v.videoIndex : `solo_${idx}`;
-    (groupsMap[key] = groupsMap[key] || []).push(v);
-  });
-  const groups = Object.values(groupsMap).map(clips => {
-    clips.sort((a, b) => (a.clipLabel || '').localeCompare(b.clipLabel || ''));
-    const author = clips[0]?.scriptObj?.format?.author || 'video';
-    return {
-      author,
-      clips: clips.map((c, i) => ({
-        url: c.video_url,
-        filename: `katie_${author}_${(c.clipLabel || ('clip' + (i + 1))).replace(/\s+/g, '')}.mp4`
-      }))
-    };
-  });
+  // Group completed clips by their source video (videoIndex) — same helper
+  // used for the button label, so what's sent always matches what was shown.
+  const { groups, multiClipGroups, totalFiles } = buildDriveGroups();
   if (!groups.length) { alert('No completed videos to send.'); return; }
-
-  const multiClipGroups = groups.filter(g => g.clips.length >= 2).length;
-  const totalFiles = groups.reduce((n, g) => n + g.clips.length + (g.clips.length >= 2 ? 1 : 0), 0);
 
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
