@@ -227,19 +227,16 @@ async function submitKieImageTask(refFrameUrl, norahUrl, outfit) {
   return taskId;
 }
 
-// ── Submit generation task (image-prompt hack) ────────────────
-async function submitKieTask(promptPngUrl, startFrameUrl, voiceUrl, noVoice) {
+// ── Submit generation task (base video with prompt baked in) ──
+// The base video is a Norah clip with the Omni prompt burned onto it and
+// her own voice/face as the reference. Omni reads the baked text and performs
+// it. Single instruction — "Read" — and the base video is the only ingredient.
+async function submitKieTask(baseVideoUrl) {
   const input = {
-    // The real prompt lives in the PNG. This text just points Omni to it.
-    prompt: 'Read prompt.png. Use luna_start_frame.png as the starting image for norah_new_voice.mp4',
-    // Prompt PNG first, Norah start frame second
-    image_urls: [promptPngUrl, startFrameUrl],
-    duration: '8',
+    prompt: 'Read',
+    video_list: [{ url: baseVideoUrl, start: 0, ends: 10 }],
     aspect_ratio: '9:16'
   };
-  if (!noVoice && voiceUrl) {
-    input.video_list = [{ url: voiceUrl, start: 0, ends: 10 }];
-  }
   const body = { model: 'gemini-omni-video', input };
   const res = await fetch(KIE_CREATE_URL, {
     method: 'POST',
@@ -415,42 +412,18 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── action=generate: upload prompt PNG + Norah assets fresh, submit ──
+  // ── action=generate: upload the baked base video, submit ──
+  // Body: { baseVideo: <base64 mp4, no data: prefix> } — a Norah clip with the
+  // Omni prompt baked into the frame. Re-uploaded fresh each time so the kie
+  // tempfile URL is never stale.
   if (action === 'generate') {
-    const promptPng = body.promptPng; // base64 (no data: prefix)
-    const noVoice = body.noVoice === true;
-    const startFrameUrl_in = body.startFrameUrl || null; // per-video Norah frame (optional)
-    if (!promptPng) return res.status(400).json({ error: 'promptPng required' });
+    const baseVideo = body.baseVideo;
+    if (!baseVideo) return res.status(400).json({ error: 'baseVideo required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
-      const promptBuffer = Buffer.from(promptPng, 'base64');
-
-      // Start frame: prefer the per-video Norah frame; re-fetch and re-upload it
-      // fresh under the luna filename so the prompt hint still resolves and no
-      // kie tempfile URL is stale. Any failure falls back to the bundled avatar.
-      let startBuffer = null;
-      if (startFrameUrl_in) {
-        try {
-          const fr = await fetch(startFrameUrl_in);
-          if (fr.ok) startBuffer = Buffer.from(await fr.arrayBuffer());
-        } catch (e) { /* fall back below */ }
-      }
-      if (!startBuffer) startBuffer = await readAsset('luna_start_frame.png');
-
-      const voiceBuffer = noVoice ? null : await readAsset('norah_new_voice.mp4');
-
-      const uploads = [
-        uploadToKie(promptBuffer, 'image/png', 'prompt.png'),
-        uploadToKie(startBuffer, 'image/png', 'luna_start_frame.png')
-      ];
-      if (!noVoice) uploads.push(uploadToKie(voiceBuffer, 'video/mp4', 'norah_new_voice.mp4'));
-
-      const urls = await Promise.all(uploads);
-      const promptPngUrl  = urls[0];
-      const startFrameUrl = urls[1];
-      const voiceUrl      = noVoice ? null : urls[2];
-
-      const taskId = await submitKieTask(promptPngUrl, startFrameUrl, voiceUrl, noVoice);
+      const videoBuffer = Buffer.from(baseVideo, 'base64');
+      const baseVideoUrl = await uploadToKie(videoBuffer, 'video/mp4', 'base.mp4');
+      const taskId = await submitKieTask(baseVideoUrl);
       return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
