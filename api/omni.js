@@ -227,13 +227,13 @@ async function submitKieImageTask(refFrameUrl, norahUrl, outfit) {
   return taskId;
 }
 
-// ── Submit generation task (base video with prompt baked in) ──
-// The base video is a Norah clip with the Omni prompt burned onto it and
-// her own voice/face as the reference. Omni reads the baked text and performs
-// it. Single instruction — "Read" — and the base video is the only ingredient.
-async function submitKieTask(baseVideoUrl) {
+// ── Submit generation task ──
+// The base video is a clean face+voice reference (no text burned in). The
+// dialogue/transcript is passed as `prompt` and fed straight into Omni's
+// instruction box. A prompt is always required.
+async function submitKieTask(baseVideoUrl, prompt) {
   const input = {
-    prompt: 'Read',
+    prompt,
     video_list: [{ url: baseVideoUrl, start: 0, ends: 10 }],
     aspect_ratio: '9:16'
   };
@@ -421,9 +421,11 @@ export default async function handler(req, res) {
     if (!baseVideo) return res.status(400).json({ error: 'baseVideo required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
+      const prompt = body.prompt && String(body.prompt).trim();
+      if (!prompt) return res.status(400).json({ error: 'prompt required' });
       const videoBuffer = Buffer.from(baseVideo, 'base64');
       const baseVideoUrl = await uploadToKie(videoBuffer, 'video/mp4', 'base.mp4');
-      const taskId = await submitKieTask(baseVideoUrl);
+      const taskId = await submitKieTask(baseVideoUrl, prompt);
       return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
