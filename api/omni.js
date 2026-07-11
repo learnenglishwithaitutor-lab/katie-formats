@@ -417,15 +417,35 @@ export default async function handler(req, res) {
   // Omni prompt baked into the frame. Re-uploaded fresh each time so the kie
   // tempfile URL is never stale.
   if (action === 'generate') {
-    const baseVideo = body.baseVideo;
-    if (!baseVideo) return res.status(400).json({ error: 'baseVideo required' });
+    const baseVideo = body.baseVideo;        // base64 mp4 — legacy, only safe for small clips
+    const baseVideoUrl = body.baseVideoUrl;  // preferred: a URL to the base video (tiny body → no 413)
+    if (!baseVideo && !baseVideoUrl) return res.status(400).json({ error: 'baseVideo or baseVideoUrl required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
       const prompt = body.prompt && String(body.prompt).trim();
       if (!prompt) return res.status(400).json({ error: 'prompt required' });
-      const videoBuffer = Buffer.from(baseVideo, 'base64');
-      const baseVideoUrl = await uploadToKie(videoBuffer, 'video/mp4', 'base.mp4');
-      const taskId = await submitKieTask(baseVideoUrl, prompt);
+
+      let kieVideoUrl;
+      if (baseVideoUrl) {
+        // A URL was supplied — the video never passes through the function body,
+        // so Vercel's 4.5MB request cap doesn't apply.
+        if (/redpandaai\.co|kieai\./i.test(baseVideoUrl)) {
+          kieVideoUrl = baseVideoUrl; // already hosted on kie — use directly, no re-upload
+        } else {
+          // Any other public URL (Vercel Blob, S3, etc.): fetch server-side (a GET,
+          // not subject to the body cap) and re-host on kie so submitKieTask accepts it.
+          const vr = await fetch(baseVideoUrl);
+          if (!vr.ok) throw new Error(`fetch baseVideoUrl failed (${vr.status})`);
+          const buf = Buffer.from(await vr.arrayBuffer());
+          kieVideoUrl = await uploadToKie(buf, 'video/mp4', 'base.mp4');
+        }
+      } else {
+        // Legacy base64 path — inflates ~33%, so >~3MB pre-encode will 413. Prefer baseVideoUrl.
+        const videoBuffer = Buffer.from(baseVideo, 'base64');
+        kieVideoUrl = await uploadToKie(videoBuffer, 'video/mp4', 'base.mp4');
+      }
+
+      const taskId = await submitKieTask(kieVideoUrl, prompt);
       return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
