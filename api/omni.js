@@ -231,10 +231,10 @@ async function submitKieImageTask(refFrameUrl, norahUrl, outfit) {
 // The base video is a clean face+voice reference (no text burned in). The
 // dialogue/transcript is passed as `prompt` and fed straight into Omni's
 // instruction box. A prompt is always required.
-async function submitKieTask(baseVideoUrl, prompt) {
+async function submitKieTask(baseVideoUrl, prompt, duration = 10) {
   const input = {
     prompt,
-    video_list: [{ url: baseVideoUrl, start: 0, ends: 10 }],
+    video_list: [{ url: baseVideoUrl, start: 0, ends: duration }],
     aspect_ratio: '9:16'
   };
   const body = { model: 'gemini-omni-video', input };
@@ -423,6 +423,7 @@ export default async function handler(req, res) {
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
       const prompt = (typeof body.prompt === 'string' && body.prompt.trim()) ? body.prompt : 'Read';
+      const duration = Math.min(10, Math.max(3, Number(body.duration) || 10));
 
       let kieVideoUrl;
       if (baseVideoUrl) {
@@ -444,7 +445,7 @@ export default async function handler(req, res) {
         kieVideoUrl = await uploadToKie(videoBuffer, 'video/mp4', 'base.mp4');
       }
 
-      const taskId = await submitKieTask(kieVideoUrl, prompt);
+      const taskId = await submitKieTask(kieVideoUrl, prompt, duration);
       return res.status(200).json({ taskId });
     } catch(err) {
       return res.status(500).json({ error: err.message });
