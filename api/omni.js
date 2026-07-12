@@ -422,8 +422,7 @@ export default async function handler(req, res) {
     if (!baseVideo && !baseVideoUrl) return res.status(400).json({ error: 'baseVideo or baseVideoUrl required' });
     if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
     try {
-      const prompt = body.prompt && String(body.prompt).trim();
-      if (!prompt) return res.status(400).json({ error: 'prompt required' });
+      const prompt = (typeof body.prompt === 'string' && body.prompt.trim()) ? body.prompt : 'Read';
 
       let kieVideoUrl;
       if (baseVideoUrl) {
