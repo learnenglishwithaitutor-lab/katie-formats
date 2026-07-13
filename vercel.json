@@ -2,7 +2,7 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60,
-      "includeFiles": "{luna_start_frame.png,norah_new_voice.mp4}"
+      "includeFiles": "{luna_start_frame.png,norah_new_voice.mp4,scripts/run_pipeline.py}"
     }
   }
 }
