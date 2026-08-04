@@ -14,20 +14,12 @@ Usage:
 import argparse
 import base64
 import json
-import os
 import sys
 import time
 import urllib.request
 import urllib.error
 
 BASE_URL = "https://katie-formats-app.vercel.app/api/omni"
-# The Vercel function has a hard 4.5MB request-body cap (FUNCTION_PAYLOAD_TOO_LARGE).
-# base64 inflates bytes ~33%, so a clip must stay under ~3.3MB raw to fit in one
-# request. submit_clip re-encodes any clip over this target before sending. Rule 0
-# trimming shrinks clips but is NOT a body-cap guard (a re-encode can even grow a
-# file), so this stays as the dedicated size safety net.
-RAW_TARGET   = 3_200_000   # aim the re-encode here (×1.34 ≈ 4.29MB encoded)
-MAX_B64_BODY = 4_300_000   # keep the encoded body safely under Vercel's 4.5MB
 POLL_INTERVAL = 6          # seconds between polls
 POLL_TIMEOUT = 600         # give up on a single clip after this long
 SUBMIT_RETRIES = 2         # total attempts per clip (1 original + 1 retry)
@@ -102,60 +94,6 @@ def trim_base_to_schedule(base_path, trim_len):
     return out
 
 
-def _run(cmd):
-    import subprocess
-    return subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                          stderr=subprocess.DEVNULL).returncode == 0
-
-
-def compress_under_cap(path):
-    """Return a path to a version of the clip whose raw bytes are under RAW_TARGET
-    (so its base64 body stays under Vercel's 4.5MB cap). If the clip is already
-    small enough, returns it unchanged. Re-encodes with H.264 at progressively
-    lower quality until it fits; keeps audio intact for the voice reference.
-    Uses ffmpeg (already required by the pipeline); no token, no upload host."""
-    import subprocess, tempfile
-    size = os.path.getsize(path)
-    if size <= RAW_TARGET:
-        return path  # already fits — submit as-is, no quality loss
-
-    # Probe duration so we can target a bitrate that lands under RAW_TARGET.
-    try:
-        dur = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", path],
-            capture_output=True, text=True).stdout.strip() or 0)
-    except Exception:
-        dur = 0
-
-    tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
-    # Try a few CRF/scale steps, each smaller, until one lands under the target.
-    attempts = [
-        ["-vf", "scale='min(720,iw)':-2", "-c:v", "libx264", "-crf", "26", "-preset", "veryfast", "-c:a", "aac", "-b:a", "96k"],
-        ["-vf", "scale='min(640,iw)':-2", "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-c:a", "aac", "-b:a", "80k"],
-        ["-vf", "scale='min(540,iw)':-2", "-c:v", "libx264", "-crf", "30", "-preset", "veryfast", "-c:a", "aac", "-b:a", "64k"],
-    ]
-    # If we know duration, also try an explicit total-size cap as a last resort.
-    for a in attempts:
-        ok = _run(["ffmpeg", "-y", "-i", path, *a, "-movflags", "+faststart", tmp])
-        if ok and os.path.getsize(tmp) <= RAW_TARGET:
-            return tmp
-    if dur > 0:
-        # Bitrate math: target bits / duration, minus a little for audio.
-        vbit = max(200_000, int((RAW_TARGET * 8 / dur) - 90_000))
-        ok = _run(["ffmpeg", "-y", "-i", path, "-vf", "scale='min(540,iw)':-2",
-                   "-c:v", "libx264", "-b:v", str(vbit), "-maxrate", str(int(vbit*1.2)),
-                   "-bufsize", str(vbit), "-preset", "veryfast",
-                   "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", tmp])
-        if ok and os.path.getsize(tmp) <= RAW_TARGET:
-            return tmp
-    # Couldn't get under the cap — return whatever we produced (smallest) or original.
-    if os.path.exists(tmp) and 0 < os.path.getsize(tmp) < size:
-        return tmp
-    return path
-
-
-
 def submit_clip(path, prompt=None, duration=None):
     """POST action=generate with the clip's base64 bytes. Returns taskId.
     prompt=None -> baked-clip mode (backend submits its default 'Read').
@@ -164,17 +102,8 @@ def submit_clip(path, prompt=None, duration=None):
     duration    -> requested output length in seconds (3-10, backend clamps;
     omitted = 10). Size clips to speech+~1s so there are no blank seconds
     for Omni to fill with bleed or babble."""
-    send_path = compress_under_cap(path)
-    if send_path != path:
-        print(f"  compressed {os.path.basename(path)}: "
-              f"{os.path.getsize(path)/1e6:.2f}MB -> {os.path.getsize(send_path)/1e6:.2f}MB",
-              file=sys.stderr)
-    with open(send_path, "rb") as f:
+    with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    if len(b64) > MAX_B64_BODY:
-        raise RuntimeError(
-            f"{os.path.basename(path)} is still {len(b64)/1e6:.1f}MB after compression "
-            f"(> {MAX_B64_BODY/1e6:.1f}MB cap) — clip is unusually long, split it further.")
     payload = {"action": "generate", "baseVideo": b64}
     if prompt is not None:
         payload["prompt"] = prompt
@@ -232,7 +161,9 @@ def _normalize_words(text):
 
 def transcribe_video(path):
     """Extract audio and transcribe with faster-whisper small.en.
-    Returns (text, words) where words = [(start, end), ...]."""
+    Returns (text, words) where words = [(start, end, word), ...].
+    The per-word TEXT matters: it is what lets the tail trim tell real script
+    words apart from leaked base-video speech (see _match_end_time)."""
     global _whisper_model
     import subprocess, tempfile, os
     from faster_whisper import WhisperModel
@@ -249,7 +180,7 @@ def transcribe_video(path):
         for s in segments:
             text_parts.append(s.text.strip())
             for w in (s.words or []):
-                words.append((w.start, w.end))
+                words.append((w.start, w.end, (w.word or "").strip()))
         return " ".join(text_parts), words
     finally:
         if os.path.exists(wav):
@@ -314,7 +245,8 @@ def music_check(video_path, words):
         audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
         w.close()
         mask = np.zeros(len(audio), dtype=bool)
-        for s, e in words:
+        for w in words:            # (start, end) or (start, end, text)
+            s, e = w[0], w[1]
             mask[int(s * sr):int(e * sr)] = True
         speech = audio[mask]
         if len(speech) < sr * 0.5:      # nothing spoken — can't baseline; skip
@@ -363,26 +295,97 @@ def qa_clip(video_url, intended, tmp_path):
     return {
         "fails": fails, "sim": sim, "diff": diff,
         "overlay_sample": ovl_sample, "music_ratio": mus_ratio,
-        "words": words, "local": tmp_path,
+        "words": words, "local": tmp_path, "text": got,
     }
 
 
 TRIM_TAIL_PAD = 0.5  # seconds kept after the last spoken word
+MATCH_MIN_COVERAGE = 0.5  # need this fraction of intended words matched to trust alignment
 
 
-def trim_and_stitch(local_paths, words_per_clip, output_path):
-    """Trim each clip to last-spoken-word + TRIM_TAIL_PAD, then stitch locally
-    with ffmpeg. Kills silent/babble tails and base-audio bleed — a sparse clip
-    is simply SHORT, not half-empty. Clips are re-encoded uniformly so concat
-    is safe."""
+def _norm_tokens_with_index(words):
+    """[(normalised_token, index_into_words), ...] for alignment."""
+    import re
+    out = []
+    for i, w in enumerate(words):
+        raw = w[2] if len(w) > 2 else ""
+        for tok in re.sub(r"[^a-z0-9' ]+", " ", raw.lower()).split():
+            if tok not in _FILLERS:
+                out.append((tok, i))
+    return out
+
+
+def _match_end_time(intended, words):
+    """End time of the last transcribed word that ALIGNS to the intended script.
+
+    Why this exists: leaked base-video audio transcribes as perfectly ordinary
+    words, so trimming at the last word *heard* keeps the leak instead of
+    removing it (observed: a clip ended '...the Katie app' + 'out a loan. You',
+    all three leak words verbatim from the Sarah base clip). Aligning the
+    transcript against the intended script and cutting after the last MATCHED
+    word drops the leak while keeping every real word.
+
+    Returns None when alignment is too weak to trust (caller falls back to the
+    last-word-heard behaviour rather than over-trimming a good clip).
+    """
+    import difflib
+    if not words or not intended:
+        return None
+    toks = _norm_tokens_with_index(words)
+    if not toks:
+        return None
+    got = [t for t, _ in toks]
+    want = _normalize_words(intended)
+    if not want:
+        return None
+    sm = difflib.SequenceMatcher(a=want, b=got, autojunk=False)
+    matched, last_b = 0, -1
+    for blk in sm.get_matching_blocks():
+        if blk.size:
+            matched += blk.size
+            last_b = max(last_b, blk.b + blk.size - 1)
+    if last_b < 0 or matched / len(want) < MATCH_MIN_COVERAGE:
+        return None
+    return words[toks[last_b][1]][1]
+
+
+def _probe_duration(path):
+    import subprocess
+    return float(subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True).stdout.strip())
+
+
+def trim_and_stitch(local_paths, words_per_clip, output_path, intended_per_clip=None):
+    """Trim each clip to its last real spoken word + TRIM_TAIL_PAD, then stitch
+    locally with ffmpeg. Kills silent/babble tails and base-audio bleed — a
+    sparse clip is simply SHORT, not half-empty. Clips are re-encoded uniformly
+    so concat is safe.
+
+    When intended_per_clip is given, the cut point comes from aligning the
+    transcript to the intended script (_match_end_time), which is what actually
+    removes leaked base audio. Without it, falls back to last-word-heard.
+
+    Returns per-part metadata (cut point + real encoded duration + words), which
+    main() turns into <output>.manifest.json for downstream caption tooling.
+    """
     import subprocess, tempfile, os
-    parts = []
-    for p, words in zip(local_paths, words_per_clip):
-        dur = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", p],
-            capture_output=True, text=True).stdout.strip())
-        end = (max(e for _, e in words) + TRIM_TAIL_PAD) if words else None
+    parts, meta = [], []
+    for k, (p, words) in enumerate(zip(local_paths, words_per_clip)):
+        dur = _probe_duration(p)
+        words = words or []
+        end = None
+        if intended_per_clip and k < len(intended_per_clip) and intended_per_clip[k]:
+            m = _match_end_time(intended_per_clip[k], words)
+            if m is not None:
+                end = m + TRIM_TAIL_PAD
+                heard = max((w[1] for w in words), default=0.0)
+                if heard - m > 0.3:
+                    print(f"  leak trim: {os.path.basename(p)} last SCRIPT word "
+                          f"{m:.2f}s but audio ran to {heard:.2f}s — cutting the tail")
+        if end is None and words:
+            end = max(w[1] for w in words) + TRIM_TAIL_PAD
         out = tempfile.mktemp(suffix=".mp4")
         cmd = ["ffmpeg", "-v", "error", "-y", "-i", p]
         if end is not None and end < dur - 0.1:
@@ -392,15 +395,24 @@ def trim_and_stitch(local_paths, words_per_clip, output_path):
                 "-c:a", "aac", "-b:a", "192k", out]
         subprocess.run(cmd, check=True)
         parts.append(out)
+        meta.append({"cut_at": end, "words": words})
+
     if len(parts) == 1:
         os.replace(parts[0], output_path)
-        return
+        meta[0]["duration"] = _probe_duration(output_path)
+        return meta
+
+    # real encoded durations drive the manifest offsets: concat re-encoding
+    # shifts lengths by a frame or two, and captions drifting late is visible
+    for m, pp in zip(meta, parts):
+        m["duration"] = _probe_duration(pp)
     lst = tempfile.mktemp(suffix=".txt")
     with open(lst, "w") as f:
         for pp in parts:
             f.write(f"file '{pp}'\n")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
                     "-i", lst, "-c", "copy", output_path], check=True)
+    return meta
 
 
 def _suffix_equal(w1, w2):
@@ -439,6 +451,54 @@ def script_check(intended, got_text):
     return not diff_lines, sim, diff_lines
 
 
+def write_manifest(output_path, parts_meta, intended_per_clip=None, texts=None):
+    """Emit <output>.manifest.json — per-clip word timestamps and clip
+    boundaries in FINAL-TIMELINE seconds (after trims + stitch).
+
+    This is the caption-styler integration contract (see that skill's
+    INTEGRATION.md): with it, caption tooling skips re-transcribing the target
+    and gets scene-cut awareness for free, so no overlay straddles a stitch
+    seam. Word times are offset by the real encoded duration of each preceding
+    part, never by the intended trim length.
+    """
+    import json, os
+    clips, offset = [], 0.0
+    for k, pm in enumerate(parts_meta):
+        cut = pm.get("cut_at")
+        wl = []
+        for w in pm.get("words") or []:
+            if cut is not None and w[0] >= cut:
+                continue          # dropped by the trim; not in the final video
+            w_end = min(w[1], cut) if cut is not None else w[1]
+            wl.append({
+                "word": (w[2] if len(w) > 2 else ""),
+                "start": round(w[0] + offset, 3),
+                "end": round(w_end + offset, 3),      # offset applies to BOTH ends
+            })
+        dur = pm.get("duration") or 0.0
+        clips.append({
+            "index": k,
+            "intended_script": (intended_per_clip[k] if intended_per_clip and k < len(intended_per_clip) else None),
+            "transcript": (texts[k] if texts and k < len(texts) else None),
+            "start": round(offset, 3),
+            "end": round(offset + dur, 3),
+            "words": wl,
+        })
+        offset += dur
+    manifest = {
+        "version": 1,
+        "output": os.path.abspath(output_path),
+        "duration": _probe_duration(output_path),
+        "clips": clips,
+    }
+    base, _ = os.path.splitext(output_path)
+    path = f"{base}.manifest.json"
+    with open(path, "w") as f:
+        json.dump(manifest, f, indent=1)
+    print(f"Manifest: {path}")
+    return path
+
+
 def stitch(clip_urls, output_path):
     body = _post_binary({"action": "stitch", "clips": clip_urls})
     with open(output_path, "wb") as f:
@@ -446,7 +506,13 @@ def stitch(clip_urls, output_path):
 
 
 def download(url, output_path):
-    req = urllib.request.Request(url, method="GET")
+    # The result CDN (tempfile.aiquickdraw.com) 403s Python's default
+    # "Python-urllib/3.x" User-Agent. Without a browser UA every download
+    # fails, which silently skips the whole QA suite AND the tail-trim --
+    # so truncated clips ship unflagged. Keep this header.
+    req = urllib.request.Request(
+        url, method="GET", headers={"User-Agent": "Mozilla/5.0"}
+    )
     with urllib.request.urlopen(req, timeout=120) as r:
         with open(output_path, "wb") as f:
             f.write(r.read())
@@ -631,6 +697,7 @@ def main():
     qa_flags = [None] * n   # None = not checked / ok; str = flag report
     qa_locals = [None] * n  # downloaded clip files (kept for local trim+stitch)
     qa_words = [None] * n   # word timestamps per clip (for tail trim)
+    qa_texts = [None] * n   # transcript per clip (for the manifest)
     if args.scripts:
         import tempfile
         print("\nQA (script / overlay / music) on generated clips...")
@@ -656,6 +723,7 @@ def main():
                 print(f"  [{i+1}/{n}] QA skipped (error: {e})", file=sys.stderr)
                 continue
             qa_locals[i], qa_words[i] = q["local"], q["words"]
+            qa_texts[i] = q.get("text")
             if not q["fails"]:
                 print(f"  [{i+1}/{n}] all checks OK (similarity {q['sim']:.2f})")
                 continue
@@ -679,6 +747,7 @@ def main():
                     results[i] = ("success", url2, None)
                     q = q2
                     qa_locals[i], qa_words[i] = q["local"], q["words"]
+                    qa_texts[i] = q.get("text")
                     print(f"  [{i+1}/{n}] retry {'PASSED' if not q['fails'] else 'better: ' + _describe(q)}")
             else:
                 print(f"  [{i+1}/{n}] retry generation failed ({fail2}) — keeping first result")
@@ -704,16 +773,35 @@ def main():
     if have_locals:
         ordered = [i for i, _ in succeeded]
         print(f"\nTrimming tails + stitching {len(ordered)} clip(s) locally -> {args.output}")
-        trim_and_stitch([qa_locals[i] for i in ordered],
-                        [qa_words[i] for i in ordered], args.output)
+        intended = [args.scripts[i] for i in ordered]
+        parts_meta = trim_and_stitch([qa_locals[i] for i in ordered],
+                                     [qa_words[i] for i in ordered],
+                                     args.output, intended_per_clip=intended)
+        write_manifest(args.output, parts_meta, intended_per_clip=intended,
+                       texts=[qa_texts[i] for i in ordered])
     elif len(succeeded) == 1:
         idx, (status, video_url, _) = succeeded[0]
         print(f"\nSingle successful clip — downloading directly to {args.output}")
         download(video_url, args.output)
     else:
+        # No local copies (no --scripts, so QA never ran). Stitching is pure
+        # local ffmpeg work, so download and concat here; the remote endpoint
+        # is only a fallback (it has been observed returning
+        # 502 "stitch failed: 404" on every request).
         urls_in_order = [r[1] for r in results if r[0] == "success"]
-        print(f"\nStitching {len(urls_in_order)} clip(s) remotely -> {args.output}")
-        stitch(urls_in_order, args.output)
+        print(f"\nStitching {len(urls_in_order)} clip(s) locally -> {args.output}")
+        try:
+            import tempfile as _tempfile
+            local_paths = []
+            for u in urls_in_order:
+                p = _tempfile.mktemp(suffix=".mp4")
+                download(u, p)
+                local_paths.append(p)
+            # no word timestamps available -> no tail trim, just uniform concat
+            trim_and_stitch(local_paths, [[] for _ in local_paths], args.output)
+        except Exception as e:
+            print(f"  local stitch failed ({e}) — trying remote stitch", file=sys.stderr)
+            stitch(urls_in_order, args.output)
 
     print(f"\nDone. Output: {args.output}")
     if failed:
