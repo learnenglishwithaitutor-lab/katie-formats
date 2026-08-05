@@ -146,6 +146,32 @@
     .loading-title { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
     .loading-sub { font-size: 13px; color: var(--muted); }
 
+    /* Creator discovery */
+    .creator-list { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 4px 0 16px; -webkit-overflow-scrolling: touch; }
+    .creator-row { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
+    .creator-row.starred { border-color: var(--approve); background: rgba(29,158,117,0.04); }
+    .creator-main { flex: 1; min-width: 0; cursor: pointer; }
+    .creator-handle { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .creator-stats { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .creator-bio { font-size: 11px; color: var(--muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8; }
+    .star-btn { background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px; flex-shrink: 0; opacity: 0.3; }
+    .star-btn.on { opacity: 1; }
+    .tag { font-size: 9px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+    .tag.tutorial { background: rgba(29,158,117,0.12); color: #1D9E75; }
+    .tag.emotional { background: rgba(186,117,23,0.14); color: #96601a; }
+    .tag.mixed, .tag.unknown { background: rgba(0,0,0,0.06); color: var(--muted); }
+    .tag.hot { background: rgba(226,75,74,0.12); color: #c23b3a; }
+    .metric { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+    .vid-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); align-items: flex-start; }
+    .vid-row:last-child { border-bottom: none; }
+    .vid-thumb { width: 46px; height: 62px; border-radius: 7px; object-fit: cover; background: #ebebeb; flex-shrink: 0; }
+    .vid-info { flex: 1; min-width: 0; }
+    .vid-caption { font-size: 12px; line-height: 1.45; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .vid-meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .kw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .kw-chip { background: var(--surface); border: 0.5px solid var(--border); border-radius: 999px; padding: 6px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .kw-chip button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0; }
+
     /* Home screen */
     .home-screen { flex: 1; display: flex; flex-direction: column; gap: 10px; padding-top: 4px; overflow-y: auto; }
     .stage-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: opacity 0.1s; }
@@ -166,7 +192,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v48';
+const APP_VERSION = 'v49';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -222,6 +248,16 @@ function formatPosted(iso) {
 }
 
 // ── Header ─────────────────────────────────────────────────────
+// With the video pull switched off, "last pulled" would be stuck on "Never"
+// forever — so fall back to when creators were last scanned.
+function lastPulledLabel(pulledAt) {
+  if (SWIPE_STAGE_ENABLED) {
+    return pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled';
+  }
+  const scanned = localStorage.getItem('kf_creators_date');
+  return scanned ? 'Last scan: ' + formatPulledDate(scanned) : 'No scan yet';
+}
+
 function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review') {
   return `
     <div class="header">
@@ -232,12 +268,12 @@ function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review'
       </div>
       <div class="header-right">
         <div style="display:flex;align-items:center;gap:10px;">
-          <button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
+          ${SWIPE_STAGE_ENABLED ? `<button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
             <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
-          </button>
+          </button>` : ''}
           <button class="icon-btn" onclick="showSettings()">⚙️</button>
         </div>
-        <span class="last-pulled" id="last-pulled">${pulledAt ? 'Last pulled: ' + formatPulledDate(pulledAt) : 'Never pulled'}</span>
+        <span class="last-pulled" id="last-pulled">${lastPulledLabel(pulledAt)}</span>
       </div>
     </div>`;
 }
@@ -347,7 +383,7 @@ function showStage1Done() {
         <div class="approved-list">
           ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">♥ ${f.views}</span></div>`).join('')}
         </div>
-        <button class="btn-primary" onclick="startScriptGeneration()">Continue to scripts →</button>
+        ${SCRIPT_STAGE_ENABLED ? `<button class="btn-primary" onclick="startScriptGeneration()">Continue to scripts →</button>` : ''}
       ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No formats approved.</p>'}
       <button class="btn-secondary" onclick="reviewFormatsAgain()">Review again</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
@@ -578,6 +614,7 @@ function showStage2Done() {
         <div class="approved-list">
           ${approvedScripts.map(s => `<div class="approved-item"><span class="t">@${s.format.author}</span><span class="v">${s.script.slice(0,50)}...</span></div>`).join('')}
         </div>
+        ${!OMNI_STAGE_ENABLED ? `<p style="font-size:12px;color:var(--muted);margin-bottom:16px;max-width:300px;">Omni generation is paused — scripts stop here for now.</p>` : `
         <div style="margin:4px 0 14px;text-align:center;">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Prompt style</div>
           <div style="display:inline-flex;border:0.5px solid var(--border);border-radius:10px;overflow:hidden;">
@@ -587,6 +624,7 @@ function showStage2Done() {
           <div style="font-size:11px;color:var(--muted);margin-top:6px;max-width:280px;margin-left:auto;margin-right:auto;">${promptStyle()==='simple' ? 'Just the spoken line + a light gesture cue. The Norah first frame sets the scene.' : 'Full movement breakdown + setting, matched to the reference.'}</div>
         </div>
         <button class="btn-primary" onclick="safeGenerate()" id="generate-btn">Generate videos →</button>
+        `}
       ` : '<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">No scripts approved.</p>'}
       <button class="btn-secondary" onclick="reviewScriptsAgain()">Review again</button>
       <button class="btn-secondary" onclick="showHome()">← Home</button>
@@ -1404,16 +1442,32 @@ function showSettings() {
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Settings')}
     <div class="settings-screen">
-      <div class="settings-section-title">Tracked accounts</div>
-      <div class="accounts-list" id="accounts-list"></div>
-      <div class="add-row">
-        <input class="add-input" id="add-input" type="url" inputmode="url" placeholder="@handle or tiktok.com/@handle" />
-        <button class="add-btn" onclick="addAccount()">Add</button>
+      <div style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+        <div class="settings-section-title">Discovery keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;">
+          Used to find creators you don't already follow. Searched as both a
+          keyword and a hashtag.
+        </div>
+        <div class="kw-chips" id="kw-chips"></div>
+        <div class="add-row">
+          <input class="add-input" id="kw-input" type="text" placeholder="e.g. english pronunciation" />
+          <button class="add-btn" onclick="addKeyword()">Add</button>
+        </div>
+
+        <div class="settings-section-title" style="margin-top:8px;">Tracked accounts</div>
+        <div id="accounts-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+        <div class="add-row">
+          <input class="add-input" id="add-input" type="url" inputmode="url" placeholder="@handle or tiktok.com/@handle" />
+          <button class="add-btn" onclick="addAccount()">Add</button>
+        </div>
+        <button class="btn-secondary" onclick="deepScanTracked()" style="margin-top:0;margin-bottom:16px;">Deep scan tracked accounts</button>
       </div>
       <button class="back-btn" onclick="goBack()">← Done</button>
     </div>`;
   renderAccountsList();
+  renderKeywordChips();
   document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addAccount(); });
+  document.getElementById('kw-input').addEventListener('keydown', e => { if (e.key === 'Enter') addKeyword(); });
 }
 
 function renderAccountsList() {
@@ -1617,6 +1671,416 @@ function shortDate(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  CREATOR DISCOVERY
+//
+//  Finds English-teaching creators worth copying, ranked by outliers,
+//  instead of reviewing one video at a time. Two phases:
+//    1. Discover  — sweep keywords/hashtags for candidate handles
+//    2. Deep scan — pull ~24 videos per handle for real per-creator maths
+//  Phase 2 is the one that matters: you can only call a video an outlier
+//  once you know what that account's normal looks like.
+// ══════════════════════════════════════════════════════════════════
+
+const DEFAULT_KEYWORDS = [
+  'english tips', 'learn english', 'english grammar', 'english pronunciation',
+  'speak english fluently', 'english mistakes', 'phrasal verbs', 'english vocabulary'
+];
+
+function loadKeywords() {
+  try { const k = localStorage.getItem('kf_keywords'); if (k) return JSON.parse(k); } catch(e) {}
+  return [...DEFAULT_KEYWORDS];
+}
+function saveKeywords(k) { localStorage.setItem('kf_keywords', JSON.stringify(k)); }
+
+function loadCandidates() {
+  try { const c = localStorage.getItem('kf_candidates'); if (c) return JSON.parse(c); } catch(e) {}
+  return null;
+}
+function saveCandidates(c) {
+  localStorage.setItem('kf_candidates', JSON.stringify(c));
+  localStorage.setItem('kf_candidates_date', new Date().toISOString());
+}
+
+// Creators are merged across scans and kept, so a handle scanned last week
+// still shows up alongside today's. Nothing is thrown away on a new sweep.
+function loadCreators() {
+  try { const c = localStorage.getItem('kf_creators'); if (c) return JSON.parse(c); } catch(e) {}
+  return [];
+}
+function saveCreators(incoming) {
+  const existing = loadCreators();
+  const byHandle = {};
+  existing.forEach(c => { byHandle[c.handle] = c; });
+  incoming.forEach(c => { byHandle[c.handle] = { ...c, scannedAt: new Date().toISOString() }; });
+  const merged = Object.values(byHandle);
+  localStorage.setItem('kf_creators', JSON.stringify(merged));
+  localStorage.setItem('kf_creators_date', new Date().toISOString());
+  return merged;
+}
+
+function loadStarred() {
+  try { const s = localStorage.getItem('kf_starred_creators'); if (s) return JSON.parse(s); } catch(e) {}
+  return [];
+}
+function saveStarred(s) { localStorage.setItem('kf_starred_creators', JSON.stringify(s)); }
+function isStarred(handle) { return loadStarred().includes(handle); }
+function toggleStar(handle, rerender) {
+  const s = loadStarred();
+  const i = s.indexOf(handle);
+  if (i >= 0) s.splice(i, 1); else s.push(handle);
+  saveStarred(s);
+  if (rerender) rerender();
+}
+
+function fmtNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'K';
+  return String(n);
+}
+
+function showDiscoverLoading(title, sub) {
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(localStorage.getItem('kf_pulled'), null, true, 'Creator discovery')}
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div>
+        <div class="loading-title" id="loading-title">${title}</div>
+        <div class="loading-sub" id="loading-sub">${sub || ''}</div>
+      </div>
+    </div>`;
+}
+function setDiscoverStatus(title, sub) {
+  const t = document.getElementById('loading-title');
+  const s = document.getElementById('loading-sub');
+  if (t && title) t.textContent = title;
+  if (s && sub != null) s.textContent = sub;
+}
+
+// Polls an Apify run until it finishes, then returns its datasetId.
+async function waitForRun(runId, label) {
+  for (let attempt = 1; attempt <= 90; attempt++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const res = await fetch(`/api/discover?action=status&runId=${runId}`);
+    const data = await res.json();
+    const found = data.itemCount != null ? ` · ${data.itemCount} videos so far` : '';
+    setDiscoverStatus(null, `${label} — ${attempt * 5}s${found}`);
+    if (data.status === 'SUCCEEDED' && data.datasetId) return data.datasetId;
+    if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(data.status)) {
+      throw new Error('Apify run ' + data.status);
+    }
+  }
+  throw new Error('Scrape timed out after 7.5 minutes');
+}
+
+// ── Phase 1: keyword sweep ────────────────────────────────────────
+async function startDiscovery() {
+  const keywords = loadKeywords();
+  if (!keywords.length) { alert('Add some keywords in ⚙️ Settings first.'); return; }
+  showDiscoverLoading('Sweeping keywords…', `${keywords.length} keywords`);
+  try {
+    const res = await fetch('/api/discover?action=discover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords, perKeyword: 40 })
+    });
+    const data = await res.json();
+    if (!data.runId) throw new Error(data.error || 'Could not start the sweep');
+    const datasetId = await waitForRun(data.runId, 'Sweeping');
+    setDiscoverStatus('Grouping by creator…', '');
+    const cRes = await fetch(`/api/discover?action=candidates&datasetId=${datasetId}`);
+    const cData = await cRes.json();
+    if (!cData.candidates) throw new Error(cData.error || 'No candidates returned');
+    saveCandidates(cData.candidates);
+    showCandidates();
+  } catch (err) {
+    alert('Discovery failed: ' + err.message);
+    showHome();
+  }
+}
+
+function showCandidates() {
+  const candidates = loadCandidates() || [];
+  const tutorial = candidates.filter(c => c.style === 'tutorial');
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(localStorage.getItem('kf_pulled'), `${candidates.length} creators found · ${tutorial.length} look tutorial-style`, true, 'Candidates')}
+    <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
+      From the keyword sweep. Views here are just the one video that surfaced —
+      deep scan to get each creator's real numbers.
+    </div>
+    <div class="creator-list">
+      ${candidates.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">Nothing found. Try different keywords.</p>` : ''}
+      ${candidates.map(c => `
+        <div class="creator-row">
+          <div class="creator-main" onclick="window.open('https://www.tiktok.com/@${c.handle}','_blank')">
+            <div class="creator-handle">
+              @${c.handle}
+              <span class="tag ${c.style}">${c.style}</span>
+              ${c.verified ? '<span class="tag mixed">verified</span>' : ''}
+            </div>
+            <div class="creator-stats">
+              <span class="metric">${fmtNum(c.followers)}</span> followers ·
+              best seen <span class="metric">${fmtNum(c.bestViews)}</span> views ·
+              hit ${c.hits}× on your keywords
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-primary" onclick="deepScanCandidates()">Deep scan top 20 tutorial creators →</button>
+    <button class="btn-secondary" onclick="showHome()">← Home</button>`;
+}
+
+// ── Phase 2: deep scan for real per-creator numbers ───────────────
+async function deepScanCandidates() {
+  const candidates = loadCandidates() || [];
+  // Tutorial-style first — that's the automated track. Unknowns fill the rest.
+  const ranked = [
+    ...candidates.filter(c => c.style === 'tutorial'),
+    ...candidates.filter(c => c.style === 'unknown')
+  ];
+  const handles = ranked.slice(0, 20).map(c => c.handle);
+  if (!handles.length) { alert('No tutorial-style candidates to scan.'); return; }
+  await deepScan(handles);
+}
+
+async function deepScan(handles) {
+  showDiscoverLoading('Deep scanning creators…', `${handles.length} accounts, ~24 videos each`);
+  try {
+    const res = await fetch('/api/discover?action=profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handles, perProfile: 24 })
+    });
+    const data = await res.json();
+    if (!data.runId) throw new Error(data.error || 'Could not start the scan');
+    const datasetId = await waitForRun(data.runId, 'Scanning');
+    setDiscoverStatus('Working out the outliers…', '');
+    const cRes = await fetch(`/api/discover?action=creators&datasetId=${datasetId}`);
+    const cData = await cRes.json();
+    if (!cData.creators) throw new Error(cData.error || 'No creators returned');
+    saveCreators(cData.creators);
+    showCreators();
+  } catch (err) {
+    alert('Deep scan failed: ' + err.message);
+    showHome();
+  }
+}
+
+// Also lets you deep scan the accounts already in Settings.
+async function deepScanTracked() {
+  const handles = loadAccounts().map(u => handleFromUrl(u).replace(/^@/, ''));
+  if (!handles.length) { alert('No tracked accounts. Add some in ⚙️ Settings.'); return; }
+  await deepScan(handles);
+}
+
+function creatorRowHTML(c, rerenderFn) {
+  const starred = isStarred(c.handle);
+  const hot = c.reachRatio >= 1;  // median views beat their own follower count
+  return `
+    <div class="creator-row ${starred ? 'starred' : ''}">
+      <div class="creator-main" onclick="showCreatorDetail('${c.handle}')">
+        <div class="creator-handle">
+          @${c.handle}
+          <span class="tag ${c.style}">${c.style}</span>
+          ${hot ? '<span class="tag hot">punching up</span>' : ''}
+        </div>
+        <div class="creator-stats">
+          <span class="metric">${fmtNum(c.medianViews)}</span> median views ·
+          <span class="metric">${fmtNum(c.followers)}</span> followers ·
+          <span class="metric">${c.reachRatio}×</span> reach per follower<br>
+          best post <span class="metric">${fmtNum(c.topViews)}</span>
+          (<span class="metric">${c.outlierRatio}×</span> their normal) ·
+          ${c.outlierCount} outlier${c.outlierCount === 1 ? '' : 's'} in ${c.sampled} posts
+        </div>
+        ${c.bio ? `<div class="creator-bio">${c.bio}</div>` : ''}
+      </div>
+      <button class="star-btn ${starred ? 'on' : ''}" onclick="toggleStar('${c.handle}', ${rerenderFn})">★</button>
+    </div>`;
+}
+
+function showCreators() {
+  const creators = loadCreators();
+  const scanned = localStorage.getItem('kf_creators_date');
+  const starredCount = loadStarred().length;
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} scanned · ${starredCount} shortlisted`, true, 'Creators by outlier')}
+    <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
+      Ranked by reach per follower — a small account pulling big views means the
+      <em>format</em> is winning, not the audience. Star the ones worth copying.
+    </div>
+    <div class="creator-list">
+      ${creators.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">Nothing scanned yet. Run a discovery sweep first.</p>` : ''}
+      ${creators.map(c => creatorRowHTML(c, 'showCreators')).join('')}
+    </div>
+    ${scanned ? `<div style="font-size:10px;color:var(--muted);text-align:center;padding-bottom:8px;">Last scan: ${formatPulledDate(scanned)}</div>` : ''}
+    <button class="btn-secondary" onclick="showHome()" style="margin-top:0;">← Home</button>`;
+}
+
+function showCreatorDetail(handle) {
+  const c = loadCreators().find(x => x.handle === handle);
+  if (!c) return showCreators();
+  const starred = isStarred(handle);
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(localStorage.getItem('kf_pulled'), null, true, '@' + c.handle)}
+    <div style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">
+        <div class="creator-handle">${c.nickname || '@' + c.handle}
+          <span class="tag ${c.style}">${c.style}</span>
+        </div>
+        <div class="creator-stats">
+          <span class="metric">${fmtNum(c.followers)}</span> followers ·
+          <span class="metric">${fmtNum(c.postCount)}</span> posts<br>
+          median <span class="metric">${fmtNum(c.medianViews)}</span> views ·
+          reach <span class="metric">${c.reachRatio}×</span> per follower ·
+          ${Math.round(c.tutorialShare * 100)}% tutorial captions
+        </div>
+        ${c.bio ? `<div class="creator-stats" style="margin-top:8px;">${c.bio}</div>` : ''}
+        <button class="btn-secondary" onclick="toggleStar('${c.handle}', function(){showCreatorDetail('${c.handle}')})" style="margin-top:12px;">
+          ${starred ? '★ Shortlisted — tap to remove' : '☆ Add to shortlist'}
+        </button>
+      </div>
+      <div class="settings-section-title">Their biggest posts</div>
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:14px;padding:4px 14px;">
+        ${(c.topVideos || []).map(v => `
+          <div class="vid-row" onclick="window.open('${v.url}','_blank')" style="cursor:pointer;">
+            ${v.thumbnail ? `<img class="vid-thumb" src="${v.thumbnail}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="vid-thumb"></div>'}
+            <div class="vid-info">
+              <div class="vid-caption">${(v.caption || 'No caption').replace(/</g, '&lt;')}</div>
+              <div class="vid-meta">
+                <span class="metric">${fmtNum(v.views)}</span> views ·
+                <span class="metric">${v.multiple}×</span> their normal ·
+                ${fmtNum(v.likes)} likes · ${formatPosted(v.created) || ''}
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+      <button class="btn-secondary" onclick="window.open('https://www.tiktok.com/@${c.handle}','_blank')">Open @${c.handle} on TikTok</button>
+      <button class="btn-secondary" onclick="showCreators()">← Back to creators</button>
+    </div>`;
+}
+
+// The shortlist: every outlier video from every starred creator, biggest
+// multiple first. This is the queue of things worth recreating.
+function showShortlist() {
+  const starred = loadStarred();
+  const creators = loadCreators().filter(c => starred.includes(c.handle));
+  const videos = [];
+  creators.forEach(c => {
+    (c.topVideos || []).forEach(v => {
+      if (v.multiple >= 2) videos.push({ ...v, handle: c.handle, style: c.style });
+    });
+  });
+  videos.sort((a, b) => b.multiple - a.multiple);
+
+  document.getElementById('app').innerHTML = `
+    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} creators · ${videos.length} outlier videos`, true, 'Shortlist')}
+    <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
+      Outlier posts (2× that creator's own normal or better) from your starred
+      creators. Biggest multiple first.
+    </div>
+    <div class="creator-list">
+      ${videos.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">
+        No shortlisted videos yet. Star some creators first.</p>` : ''}
+      ${videos.map(v => `
+        <div class="creator-row" onclick="window.open('${v.url}','_blank')" style="cursor:pointer;">
+          ${v.thumbnail ? `<img class="vid-thumb" src="${v.thumbnail}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="vid-thumb"></div>'}
+          <div class="creator-main">
+            <div class="creator-handle" style="font-size:12px;">@${v.handle}
+              <span class="tag hot">${v.multiple}×</span>
+              <span class="tag ${v.style}">${v.style}</span>
+            </div>
+            <div class="vid-caption" style="margin-top:5px;">${(v.caption || 'No caption').replace(/</g, '&lt;')}</div>
+            <div class="vid-meta"><span class="metric">${fmtNum(v.views)}</span> views · ${fmtNum(v.likes)} likes · ${formatPosted(v.created) || ''}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-secondary" onclick="showHome()" style="margin-top:0;">← Home</button>`;
+}
+
+// ── Keywords editor (Settings) ────────────────────────────────────
+function renderKeywordChips() {
+  const el = document.getElementById('kw-chips');
+  if (!el) return;
+  const kws = loadKeywords();
+  el.innerHTML = kws.length
+    ? kws.map((k, i) => `<span class="kw-chip">${k}<button onclick="removeKeyword(${i})">×</button></span>`).join('')
+    : `<span style="font-size:12px;color:var(--muted);">No keywords yet.</span>`;
+}
+function addKeyword() {
+  const input = document.getElementById('kw-input');
+  const raw = input.value.trim().toLowerCase();
+  if (!raw) return;
+  const kws = loadKeywords();
+  if (!kws.includes(raw)) { kws.push(raw); saveKeywords(kws); }
+  input.value = '';
+  renderKeywordChips();
+}
+function removeKeyword(i) {
+  const kws = loadKeywords(); kws.splice(i, 1); saveKeywords(kws); renderKeywordChips();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  LEGACY STAGES: PAUSED
+//
+//  The app's job is now approving *creators*, not videos. Generation
+//  happens outside the app from a locked format template + topic bank,
+//  so per-video swiping and script review are both off.
+//
+//  No code was deleted. Flip a flag to true and that stage comes back
+//  exactly as it was:
+//    SWIPE_STAGE_ENABLED   swipe videos to approve formats  (Stage 1)
+//    SCRIPT_STAGE_ENABLED  generate + swipe scripts         (Stage 2)
+//    OMNI_STAGE_ENABLED    generate videos via kie.ai       (Stage 3)
+// ══════════════════════════════════════════════════════════════════
+const SWIPE_STAGE_ENABLED  = false;
+const SCRIPT_STAGE_ENABLED = false;
+const OMNI_STAGE_ENABLED   = false;
+
+const ANY_LEGACY_STAGE = SWIPE_STAGE_ENABLED || SCRIPT_STAGE_ENABLED || OMNI_STAGE_ENABLED;
+
+function swipeStageCardHTML(hasVideos, hasFormats, af, cache, pulled) {
+  return `
+      <div class="stage-card ${!hasVideos ? 'disabled' : ''}" onclick="${hasVideos ? 'startStage1()' : ''}">
+        <div class="stage-icon">🎬</div>
+        <div class="stage-info">
+          <div class="stage-title">Review formats
+            ${hasFormats ? `<span class="stage-badge ready">${af.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasVideos ? `${cache.videos.length} videos from ${shortDate(pulled)}` : 'No videos yet — tap Refresh'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>`;
+}
+
+function scriptStageCardHTML(hasFormats, hasScripts, af, as_, afDate) {
+  return `
+      <div class="stage-card ${!hasFormats ? 'disabled' : ''}" onclick="${hasFormats ? 'startStage2()' : ''}">
+        <div class="stage-icon">✍️</div>
+        <div class="stage-info">
+          <div class="stage-title">Review scripts
+            ${hasScripts ? `<span class="stage-badge ready">${as_.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasFormats ? `${af.length} formats approved · ${shortDate(afDate)}` : 'Complete Stage 1 first'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>`;
+}
+
+function omniStageCardHTML(hasScripts, hasGenerated, gv, as_, asDate) {
+  return `
+      <div class="stage-card ${!hasScripts ? 'disabled' : ''}" onclick="${hasScripts ? 'startStage3()' : ''}">
+        <div class="stage-icon">🎥</div>
+        <div class="stage-info">
+          <div class="stage-title">Generate videos
+            ${hasGenerated ? `<span class="stage-badge ready">${gv.length} generated</span>` : `<span class="stage-badge empty">Not started</span>`}
+          </div>
+          <div class="stage-meta">${hasScripts ? `${as_.length} scripts approved · ${shortDate(asDate)}` : 'Complete Stage 2 first'}</div>
+        </div>
+        <div class="stage-arrow">›</div>
+      </div>`;
+}
+
 // ── Home screen ────────────────────────────────────────────────
 function showHome() {
   // Save any in-progress approvals before leaving
@@ -1637,42 +2101,56 @@ function showHome() {
   const hasScripts = as_ && as_.length > 0;
   const hasGenerated = gv && gv.length > 0;
 
+  // Creator discovery state
+  const candidates = loadCandidates();
+  const creators = loadCreators();
+  const starred = loadStarred();
+  const creatorsDate = localStorage.getItem('kf_creators_date');
+  const shortlistCount = creators
+    .filter(c => starred.includes(c.handle))
+    .reduce((n, c) => n + (c.topVideos || []).filter(v => v.multiple >= 2).length, 0);
+
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulled, null, false)}
+    ${headerHTML(pulled, null, false, ANY_LEGACY_STAGE ? 'Katie Formats' : 'Creator discovery')}
     <div class="home-screen">
 
-      <div class="stage-card ${!hasVideos ? 'disabled' : ''}" onclick="${hasVideos ? 'startStage1()' : ''}">
-        <div class="stage-icon">🎬</div>
+      <div class="stage-card" onclick="startDiscovery()">
+        <div class="stage-icon">🔎</div>
         <div class="stage-info">
-          <div class="stage-title">Review formats
-            ${hasFormats ? `<span class="stage-badge ready">${af.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          <div class="stage-title">Discover creators
+            ${candidates && candidates.length ? `<span class="stage-badge ready">${candidates.length} found</span>` : `<span class="stage-badge empty">Not run</span>`}
           </div>
-          <div class="stage-meta">${hasVideos ? `${cache.videos.length} videos from ${shortDate(pulled)}` : 'No videos yet — tap Refresh'}</div>
+          <div class="stage-meta">Sweep ${loadKeywords().length} keywords for new English-teaching creators</div>
         </div>
         <div class="stage-arrow">›</div>
       </div>
 
-      <div class="stage-card ${!hasFormats ? 'disabled' : ''}" onclick="${hasFormats ? 'startStage2()' : ''}">
-        <div class="stage-icon">✍️</div>
+      <div class="stage-card ${creators.length === 0 ? 'disabled' : ''}" onclick="${creators.length ? 'showCreators()' : ''}">
+        <div class="stage-icon">📈</div>
         <div class="stage-info">
-          <div class="stage-title">Review scripts
-            ${hasScripts ? `<span class="stage-badge ready">${as_.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          <div class="stage-title">Creators by outlier
+            ${creators.length ? `<span class="stage-badge ready">${starred.length} starred</span>` : `<span class="stage-badge empty">Nothing scanned</span>`}
           </div>
-          <div class="stage-meta">${hasFormats ? `${af.length} formats approved · ${shortDate(afDate)}` : 'Complete Stage 1 first'}</div>
+          <div class="stage-meta">${creators.length ? `${creators.length} creators scanned · ${shortDate(creatorsDate)}` : 'Run discovery, then deep scan'}</div>
         </div>
         <div class="stage-arrow">›</div>
       </div>
 
-      <div class="stage-card ${!hasScripts ? 'disabled' : ''}" onclick="${hasScripts ? 'startStage3()' : ''}">
-        <div class="stage-icon">🎥</div>
+      <div class="stage-card ${shortlistCount === 0 ? 'disabled' : ''}" onclick="${shortlistCount ? 'showShortlist()' : ''}">
+        <div class="stage-icon">⭐</div>
         <div class="stage-info">
-          <div class="stage-title">Generate videos
-            ${hasGenerated ? `<span class="stage-badge ready">${gv.length} generated</span>` : `<span class="stage-badge empty">Not started</span>`}
+          <div class="stage-title">Shortlist
+            ${shortlistCount ? `<span class="stage-badge ready">${shortlistCount} videos</span>` : `<span class="stage-badge empty">Empty</span>`}
           </div>
-          <div class="stage-meta">${hasScripts ? `${as_.length} scripts approved · ${shortDate(asDate)}` : 'Complete Stage 2 first'}</div>
+          <div class="stage-meta">${shortlistCount ? `Outlier posts from ${starred.length} starred creator${starred.length === 1 ? '' : 's'}` : 'Star creators to build this'}</div>
         </div>
         <div class="stage-arrow">›</div>
       </div>
+
+      ${ANY_LEGACY_STAGE ? `<div style="height:1px;background:var(--border);margin:6px 0;"></div>` : ''}
+      ${SWIPE_STAGE_ENABLED  ? swipeStageCardHTML(hasVideos, hasFormats, af, cache, pulled) : ''}
+      ${SCRIPT_STAGE_ENABLED ? scriptStageCardHTML(hasFormats, hasScripts, af, as_, afDate) : ''}
+      ${OMNI_STAGE_ENABLED   ? omniStageCardHTML(hasScripts, hasGenerated, gv, as_, asDate) : ''}
 
     </div>
 
