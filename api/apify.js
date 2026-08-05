@@ -1,3 +1,5 @@
+import { DISCOVER_ACTIONS, handleDiscover } from '../lib/discover.js';
+
 const ACTOR_ID = 'GdWCkxBtKWOsKjdch';
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
@@ -15,6 +17,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, runId, datasetId } = req.query;
+
+  // Creator discovery shares this endpoint (and this actor) so it doesn't
+  // spend one of the 12 serverless-function slots. See lib/discover.js.
+  if (DISCOVER_ACTIONS.includes(action)) return handleDiscover(req, res);
 
   try {
     if (action === 'start') {
@@ -48,7 +54,9 @@ export default async function handler(req, res) {
       const data = await response.json();
       return res.status(200).json({
         status: data.data?.status,
-        datasetId: data.data?.defaultDatasetId
+        datasetId: data.data?.defaultDatasetId,
+        // Lets the discovery screens show "N videos so far" while polling.
+        itemCount: data.data?.stats?.outputItemCount ?? null
       });
     }
 

@@ -1762,7 +1762,7 @@ function setDiscoverStatus(title, sub) {
 async function waitForRun(runId, label) {
   for (let attempt = 1; attempt <= 90; attempt++) {
     await new Promise(r => setTimeout(r, 5000));
-    const res = await fetch(`/api/discover?action=status&runId=${runId}`);
+    const res = await fetch(`/api/apify?action=status&runId=${runId}`);
     const data = await res.json();
     const found = data.itemCount != null ? ` · ${data.itemCount} videos so far` : '';
     setDiscoverStatus(null, `${label} — ${attempt * 5}s${found}`);
@@ -1780,7 +1780,7 @@ async function startDiscovery() {
   if (!keywords.length) { alert('Add some keywords in ⚙️ Settings first.'); return; }
   showDiscoverLoading('Sweeping keywords…', `${keywords.length} keywords`);
   try {
-    const res = await fetch('/api/discover?action=discover', {
+    const res = await fetch('/api/apify?action=discover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keywords, perKeyword: 40 })
@@ -1789,7 +1789,7 @@ async function startDiscovery() {
     if (!data.runId) throw new Error(data.error || 'Could not start the sweep');
     const datasetId = await waitForRun(data.runId, 'Sweeping');
     setDiscoverStatus('Grouping by creator…', '');
-    const cRes = await fetch(`/api/discover?action=candidates&datasetId=${datasetId}`);
+    const cRes = await fetch(`/api/apify?action=candidates&datasetId=${datasetId}`);
     const cData = await cRes.json();
     if (!cData.candidates) throw new Error(cData.error || 'No candidates returned');
     saveCandidates(cData.candidates);
@@ -1847,7 +1847,7 @@ async function deepScanCandidates() {
 async function deepScan(handles) {
   showDiscoverLoading('Deep scanning creators…', `${handles.length} accounts, ~24 videos each`);
   try {
-    const res = await fetch('/api/discover?action=profiles', {
+    const res = await fetch('/api/apify?action=profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ handles, perProfile: 24 })
@@ -1856,7 +1856,7 @@ async function deepScan(handles) {
     if (!data.runId) throw new Error(data.error || 'Could not start the scan');
     const datasetId = await waitForRun(data.runId, 'Scanning');
     setDiscoverStatus('Working out the outliers…', '');
-    const cRes = await fetch(`/api/discover?action=creators&datasetId=${datasetId}`);
+    const cRes = await fetch(`/api/apify?action=creators&datasetId=${datasetId}`);
     const cData = await cRes.json();
     if (!cData.creators) throw new Error(cData.error || 'No creators returned');
     saveCreators(cData.creators);
