@@ -255,7 +255,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v54';
+const APP_VERSION = 'v55';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1833,6 +1833,21 @@ function setDiscoverStatus(title, sub) {
   if (s && sub != null) s.textContent = sub;
 }
 
+// Turns Apify's refusal into something you can act on. A spent quota and a bad
+// token both surface as "couldn't start the run", and they need opposite fixes.
+function apifyReason(data) {
+  const msg = data.error || 'Apify would not start the run';
+  if (/usage hard limit|monthly usage|limit exceeded/i.test(msg)) {
+    return 'Apify has hit its monthly usage limit, so it will not start a scrape.\n\n' +
+           'Open console.apify.com → Billing and either raise the spend cap or ' +
+           'wait for the reset date shown there. Nothing in the app needs fixing.';
+  }
+  if (/token|unauthor|forbidden/i.test(msg)) {
+    return 'Apify rejected the API token. Check APIFY_TOKEN in the Vercel project settings.';
+  }
+  return msg;
+}
+
 // Polls an Apify run until it finishes, then returns its datasetId.
 async function waitForRun(runId, label) {
   for (let attempt = 1; attempt <= 90; attempt++) {
@@ -1861,7 +1876,7 @@ async function startDiscovery() {
       body: JSON.stringify({ keywords, perKeyword: 40 })
     });
     const data = await res.json();
-    if (!data.runId) throw new Error(data.error || 'Could not start the sweep');
+    if (!data.runId) throw new Error(apifyReason(data));
     const datasetId = await waitForRun(data.runId, 'Sweeping');
     setDiscoverStatus('Grouping by creator…', '');
     const cRes = await fetch(`/api/apify?action=candidates&datasetId=${datasetId}`);
@@ -1940,7 +1955,7 @@ async function deepScan(handles) {
       body: JSON.stringify({ handles, perProfile: 24 })
     });
     const data = await res.json();
-    if (!data.runId) throw new Error(data.error || 'Could not start the scan');
+    if (!data.runId) throw new Error(apifyReason(data));
     const datasetId = await waitForRun(data.runId, 'Scanning');
     setDiscoverStatus('Working out the outliers…', '');
     const cRes = await fetch(`/api/apify?action=creators&datasetId=${datasetId}`);
