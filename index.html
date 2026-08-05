@@ -151,6 +151,49 @@
     .creator-row { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
     .creator-row.starred { border-color: var(--approve); background: rgba(29,158,117,0.04); }
     .creator-main { flex: 1; min-width: 0; cursor: pointer; }
+
+    /* Creator row: identity, then the shape of their posting, then the figures */
+    .row-top { display: flex; align-items: center; gap: 10px; }
+    .row-thumb { width: 34px; height: 44px; border-radius: 7px; object-fit: cover; background: #ebebeb; flex-shrink: 0; }
+    .row-id { flex: 1; min-width: 0; }
+    .row-handle { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .row-score { text-align: right; flex-shrink: 0; line-height: 1.1; }
+    .row-score-n { display: block; font-size: 20px; font-weight: 700; color: var(--approve); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+    .row-score-l { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .row-score.none .row-score-n { color: var(--muted); opacity: 0.45; }
+
+    /* Spark bars — height is the signal; the dashed rule is the breakout line */
+    .spark { position: relative; height: 28px; margin: 10px 0 8px; }
+    .spark-bars { display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+    .spark-bars span { flex: 1; background: #BDB7AB; border-radius: 1.5px; min-width: 2px; }
+    .spark-bars span.hit { background: var(--approve); }
+    .spark-rule { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(0,0,0,0.22); z-index: 1; }
+    .spark-empty { font-size: 11px; color: var(--muted); margin: 10px 0 8px; opacity: 0.7; }
+
+    .row-figs { display: flex; gap: 14px; font-size: 11px; color: var(--muted); }
+    .row-figs b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* A key instead of a paragraph — same information, one line, scannable */
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--muted); padding: 0 2px 10px; align-items: center; }
+    .legend i { display: inline-block; width: 7px; height: 11px; border-radius: 1.5px; vertical-align: -1px; margin-right: 4px; }
+    .legend .sw.hit { background: var(--approve); }
+    .legend .sw.bar { background: #BDB7AB; }
+
+    .blank { text-align: center; padding: 34px 20px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .blank-icon { font-size: 30px; margin-bottom: 10px; opacity: 0.55; }
+    .list-foot { text-align: center; font-size: 10.5px; color: var(--muted); padding: 4px 0; opacity: 0.8; }
+
+    /* Shortlist card — the thumbnail leads, since you judge a format by looking */
+    .vid-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 10px; display: flex; gap: 11px; cursor: pointer; }
+    .vid-card:active { opacity: 0.7; }
+    .vid-thumb-wrap { position: relative; flex-shrink: 0; }
+    .vid-thumb-lg { width: 62px; height: 82px; border-radius: 9px; object-fit: cover; background: #ebebeb; display: block; }
+    .vid-mult { position: absolute; left: 4px; bottom: 4px; background: var(--approve); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+    .vid-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+    .vid-body .vid-caption { -webkit-line-clamp: 3; }
+    .vid-body .vid-meta { margin-top: 0; }
+    .vid-body .vid-meta b { color: var(--text); font-weight: 600; }
     .creator-handle { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .creator-stats { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
     .creator-bio { font-size: 11px; color: var(--muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8; }
@@ -177,10 +220,14 @@
     .kw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
     .kw-chip { background: var(--surface); border: 0.5px solid var(--border); border-radius: 999px; padding: 6px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
     .kw-chip button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0; }
-    .run-steps { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; margin-top: 4px; }
-    .run-step { font-size: 12px; color: var(--muted); opacity: 0.5; }
-    .run-step.now { opacity: 1; color: var(--text); font-weight: 600; }
-    .run-step.done { opacity: 1; color: var(--approve); }
+    .run-steps { display: flex; flex-direction: column; gap: 9px; margin-top: 8px; text-align: left; align-self: center; }
+    .run-step { font-size: 12.5px; color: var(--muted); opacity: 0.45; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+    .run-step i { font-style: normal; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+    .run-step.step-now { opacity: 1; color: var(--text); font-weight: 600; }
+    .run-step.step-now i { background: var(--approve); color: #fff; }
+    .run-step.step-done { opacity: 1; color: var(--approve); }
+    .run-step.step-done i { background: var(--approve-bg); color: var(--approve); }
+    .run-note { font-size: 11px; color: var(--muted); max-width: 250px; margin-top: 2px; }
 
     /* Home screen */
     .home-screen { flex: 1; display: flex; flex-direction: column; gap: 10px; padding-top: 4px; overflow-y: auto; }
@@ -193,6 +240,11 @@
     .stage-title { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 3px; }
     .stage-meta { font-size: 11px; color: var(--muted); }
     .stage-arrow { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+    /* The count replaces the chevron: it says both "there's something here" and how much */
+    .stage-num { flex-shrink: 0; text-align: right; font-size: 22px; font-weight: 700; color: var(--approve); line-height: 1; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; }
+    .stage-num small { display: block; font-size: 9px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 3px; }
+    .stage-num.muted { color: var(--muted); opacity: 0.6; }
+    .stage-run { flex-shrink: 0; background: var(--approve); color: #fff; font-size: 12px; font-weight: 700; padding: 7px 15px; border-radius: 999px; letter-spacing: -0.1px; }
     .stage-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
     .stage-badge.ready { background: var(--approve-bg); color: var(--approve); }
     .stage-badge.empty { background: rgba(0,0,0,0.06); color: var(--muted); }
@@ -203,7 +255,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v53';
+const APP_VERSION = 'v54';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1765,14 +1817,13 @@ function showDiscoverLoading(title, sub, step = 1) {
         <div class="loading-sub" id="loading-sub">${sub || ''}</div>
       </div>
       <div class="run-steps">
-        ${RUN_STEPS.map((s, i) => `
-          <span class="run-step ${i + 1 < step ? 'done' : i + 1 === step ? 'now' : ''}">
-            ${i + 1 < step ? '✓' : i + 1}. ${s}
-          </span>`).join('')}
+        ${RUN_STEPS.map((s, i) => {
+          const state = i + 1 < step ? 'step-done' : i + 1 === step ? 'step-now' : '';
+          const mark = i + 1 < step ? '✓' : i + 1 === step ? '●' : i + 1;
+          return `<div class="run-step ${state}"><i>${mark}</i>${s}</div>`;
+        }).join('')}
       </div>
-      <div style="font-size:11px;color:var(--muted);max-width:260px;">
-        Takes a few minutes. Leave this screen open.
-      </div>
+      <div class="run-note">Takes a few minutes — keep this screen open</div>
     </div>`;
 }
 function setDiscoverStatus(title, sub) {
@@ -1981,30 +2032,58 @@ const CAM_LABEL = {
   unclear: 'unknown'
 };
 
+// One bar per post, oldest to newest. Height carries the signal — a breakout is
+// literally taller — so the chart still reads with the colour stripped out or in
+// greyscale. The dashed rule is the OUTLIER_X line: bars crossing it are the
+// breakouts, which is why the count beside it needs no explaining.
+// Bars are plain divs, not SVG: they need to fill the row's width whatever the
+// post count is, and SVG scaling either letterboxes them into the middle or
+// distorts them. Flex handles it exactly.
+//
+// Linear scale from a zero baseline — height is the encoding, so it can't be
+// bent. Clamped at CAP so one 40× post doesn't flatten the rest; the true best
+// multiple is stated in the figures underneath.
+function sparkHTML(multiples, best) {
+  const m = (multiples || []).slice(-26);
+  if (!m.length) return '<div class="spark-empty">no post history yet</div>';
+
+  const CAP = 4;
+  const pct = v => Math.max(6, Math.min(v / CAP, 1) * 100).toFixed(1);
+
+  return `
+    <div class="spark" role="img"
+         aria-label="${m.length} recent posts, ${best} beat their average ${OUTLIER_X} times over">
+      <div class="spark-rule" style="bottom:${(OUTLIER_X / CAP * 100).toFixed(0)}%"></div>
+      <div class="spark-bars">
+        ${m.map(v => `<span class="${v >= OUTLIER_X ? 'hit' : ''}" style="height:${pct(v)}%"></span>`).join('')}
+      </div>
+    </div>`;
+}
+
 function creatorRowHTML(c, rerenderFn) {
   const starred = isStarred(c.handle);
-  const hot = c.reachRatio >= 1;      // median views beat their own follower count
   const n = c.outlierCount || 0;
-  const repeats = n >= 3;             // broken out enough times to be a pattern
+  const thumb = (c.topVideos || []).find(v => v.thumbnail)?.thumbnail;
   return `
     <div class="creator-row ${starred ? 'starred' : ''}">
       <div class="creator-main" onclick="showCreatorDetail('${c.handle}')">
-        <div class="creator-handle">
-          @${c.handle}
-          ${repeats ? `<span class="tag repeat">${n} breakouts</span>` : ''}
-          <span class="tag ${c.style}">${c.style}</span>
-          ${hot ? '<span class="tag hot">punching up</span>' : ''}
+        <div class="row-top">
+          ${thumb ? `<img class="row-thumb" src="${thumb}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="row-thumb"></div>'}
+          <div class="row-id">
+            <div class="row-handle">@${c.handle}</div>
+            <div class="row-sub">${fmtNum(c.followers)} followers</div>
+          </div>
+          <div class="row-score ${n ? '' : 'none'}">
+            <span class="row-score-n">${n}</span>
+            <span class="row-score-l">breakout${n === 1 ? '' : 's'}</span>
+          </div>
         </div>
-        <div class="creator-stats">
-          <span class="metric">${n}</span> breakout${n === 1 ? '' : 's'} in
-          <span class="metric">${c.sampled}</span> posts
-          ${n ? `· best <span class="metric">${c.outlierRatio}×</span> their normal
-                 (<span class="metric">${fmtNum(c.topViews)}</span> views)` : '· no post beat their own average'}<br>
-          <span class="metric">${fmtNum(c.medianViews)}</span> median ·
-          <span class="metric">${fmtNum(c.followers)}</span> followers ·
-          <span class="metric">${c.reachRatio}×</span> reach per follower
+        ${sparkHTML(c.multiples, n)}
+        <div class="row-figs">
+          <span><b>${n ? c.outlierRatio + '×' : '—'}</b> best</span>
+          <span><b>${fmtNum(c.medianViews)}</b> typical</span>
+          <span><b>${c.reachRatio}×</b> reach</span>
         </div>
-        ${c.bio ? `<div class="creator-bio">${c.bio}</div>` : ''}
       </div>
       <button class="star-btn ${starred ? 'on' : ''}" onclick="toggleStar('${c.handle}', ${rerenderFn})">★</button>
     </div>`;
@@ -2029,21 +2108,19 @@ function showCreators() {
   const scanned = localStorage.getItem('kf_creators_date');
   const starredCount = loadStarred().length;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} usable · ${starredCount} shortlisted`, true, 'Talking-head creators')}
-    <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
-      One person speaking to camera, no skits — the only kind Sarah can
-      recreate. Ranked by how often they break out: a creator who beat their own
-      average ${OUTLIER_X}× more than once has a format that repeats. Star 3 or 4.
-    </div>
+    ${headerHTML(localStorage.getItem('kf_pulled'), `${starredCount} starred`, true, 'Creators')}
+    ${creators.length ? `<div class="legend">
+      <span><i class="sw hit"></i> beat their average ${OUTLIER_X}×</span>
+      <span><i class="sw bar"></i> normal post</span>
+      <span>★ to shortlist</span>
+    </div>` : ''}
     <div class="creator-list">
-      ${all.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">Nothing scanned yet. Run a discovery sweep first.</p>` : ''}
-      ${all.length > 0 && creators.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">
-        None of the ${all.length} creators scanned film plain talking heads. Try different keywords.</p>` : ''}
+      ${all.length === 0 ? `<div class="blank"><div class="blank-icon">🔎</div>Nothing found yet.<br>Run a search from Home.</div>` : ''}
+      ${all.length > 0 && creators.length === 0 ? `<div class="blank"><div class="blank-icon">🚫</div>
+        None of the ${all.length} creators are plain talking heads.<br>Try different keywords.</div>` : ''}
       ${creators.map(c => creatorRowHTML(c, 'showCreators')).join('')}
-      ${hidden > 0 ? `<div style="font-size:11px;color:var(--muted);text-align:center;padding:6px 0 2px;">
-        ${hidden} hidden — faceless or skit creators</div>` : ''}
+      ${hidden > 0 ? `<div class="list-foot">${hidden} hidden · faceless or skits</div>` : ''}
     </div>
-    ${scanned ? `<div style="font-size:10px;color:var(--muted);text-align:center;padding-bottom:8px;">Last scan: ${formatPulledDate(scanned)}</div>` : ''}
     <button class="btn-secondary" onclick="showHome()" style="margin-top:0;">← Home</button>`;
 }
 
@@ -2112,24 +2189,19 @@ function showShortlist() {
   videos.sort((a, b) => b.multiple - a.multiple);
 
   document.getElementById('app').innerHTML = `
-    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} creators · ${videos.length} outlier videos`, true, 'Shortlist')}
-    <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
-      Posts that beat their own creator's average by ${OUTLIER_X}× or more, from
-      the creators you starred. Biggest multiple first.
-    </div>
+    ${headerHTML(localStorage.getItem('kf_pulled'), `from ${creators.length} creator${creators.length === 1 ? '' : 's'}`, true, `${videos.length} to copy`)}
     <div class="creator-list">
-      ${videos.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">
-        No shortlisted videos yet. Star some creators first.</p>` : ''}
+      ${videos.length === 0 ? `<div class="blank"><div class="blank-icon">⭐</div>
+        Nothing here yet.<br>Star a creator to fill this.</div>` : ''}
       ${videos.map(v => `
-        <div class="creator-row" onclick="window.open('${v.url}','_blank')" style="cursor:pointer;">
-          ${v.thumbnail ? `<img class="vid-thumb" src="${v.thumbnail}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="vid-thumb"></div>'}
-          <div class="creator-main">
-            <div class="creator-handle" style="font-size:12px;">@${v.handle}
-              <span class="tag hot">${v.multiple}×</span>
-              <span class="tag ${v.style}">${v.style}</span>
-            </div>
-            <div class="vid-caption" style="margin-top:5px;">${(v.caption || 'No caption').replace(/</g, '&lt;')}</div>
-            <div class="vid-meta"><span class="metric">${fmtNum(v.views)}</span> views · ${fmtNum(v.likes)} likes · ${formatPosted(v.created) || ''}</div>
+        <div class="vid-card" onclick="window.open('${v.url}','_blank')">
+          <div class="vid-thumb-wrap">
+            ${v.thumbnail ? `<img class="vid-thumb-lg" src="${v.thumbnail}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="vid-thumb-lg"></div>'}
+            <span class="vid-mult">${v.multiple}×</span>
+          </div>
+          <div class="vid-body">
+            <div class="vid-caption">${(v.caption || 'No caption').replace(/</g, '&lt;')}</div>
+            <div class="vid-meta">@${v.handle} · <b>${fmtNum(v.views)}</b> views · ${formatPosted(v.created) || ''}</div>
           </div>
         </div>`).join('')}
     </div>
@@ -2255,34 +2327,28 @@ function showHome() {
       <div class="stage-card ${usable.length ? '' : 'primary'}" onclick="startDiscovery()">
         <div class="stage-icon">🔎</div>
         <div class="stage-info">
-          <div class="stage-title">Find creators
-            ${creatorsDate ? `<span class="stage-badge ready">${shortDate(creatorsDate)}</span>` : `<span class="stage-badge empty">Not run</span>`}
-          </div>
-          <div class="stage-meta">Searches ${loadKeywords().length} keywords, checks their numbers, drops faceless and skits — one run, a few minutes</div>
+          <div class="stage-title">Find creators</div>
+          <div class="stage-meta">${creatorsDate ? `Last run ${shortDate(creatorsDate)}` : `${loadKeywords().length} keywords ready`}</div>
         </div>
-        <div class="stage-arrow">›</div>
+        <div class="stage-run">Run</div>
       </div>
 
       <div class="stage-card ${usable.length === 0 ? 'disabled' : ''}" onclick="${usable.length ? 'showCreators()' : ''}">
         <div class="stage-icon">📈</div>
         <div class="stage-info">
-          <div class="stage-title">Talking-head creators
-            ${usable.length ? `<span class="stage-badge ready">${usable.length} usable</span>` : `<span class="stage-badge empty">Nothing yet</span>`}
-          </div>
-          <div class="stage-meta">${creators.length ? `${usable.length} kept of ${creators.length} checked · star the best` : 'Run a search first'}</div>
+          <div class="stage-title">Creators</div>
+          <div class="stage-meta">${creators.length ? `${starred.length} starred of ${usable.length}` : 'Run a search first'}</div>
         </div>
-        <div class="stage-arrow">›</div>
+        <div class="stage-num">${usable.length}<small>usable</small></div>
       </div>
 
       <div class="stage-card ${shortlistCount === 0 ? 'disabled' : ''}" onclick="${shortlistCount ? 'showShortlist()' : ''}">
         <div class="stage-icon">⭐</div>
         <div class="stage-info">
-          <div class="stage-title">Shortlist
-            ${shortlistCount ? `<span class="stage-badge ready">${shortlistCount} videos</span>` : `<span class="stage-badge empty">Empty</span>`}
-          </div>
-          <div class="stage-meta">${shortlistCount ? `Outlier posts from ${starred.length} starred creator${starred.length === 1 ? '' : 's'}` : 'Star creators to build this'}</div>
+          <div class="stage-title">Shortlist</div>
+          <div class="stage-meta">${shortlistCount ? `From ${starred.length} creator${starred.length === 1 ? '' : 's'}` : 'Star creators to fill this'}</div>
         </div>
-        <div class="stage-arrow">›</div>
+        <div class="stage-num">${shortlistCount}<small>to copy</small></div>
       </div>
 
       ${ANY_LEGACY_STAGE ? `<div style="height:1px;background:var(--border);margin:6px 0;"></div>` : ''}
