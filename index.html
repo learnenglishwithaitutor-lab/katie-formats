@@ -166,6 +166,7 @@
     .tag.cam-mixed { background: rgba(126,102,196,0.14); color: #5c47a0; }
     .tag.cam-unclear { background: rgba(0,0,0,0.04); color: var(--muted); }
     .tag.skit { background: rgba(186,117,23,0.14); color: #96601a; }
+    .tag.repeat { background: rgba(29,158,117,0.14); color: #1D9E75; }
     .metric { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
     .vid-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); align-items: flex-start; }
     .vid-row:last-child { border-bottom: none; }
@@ -202,7 +203,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v52';
+const APP_VERSION = 'v53';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1957,6 +1958,10 @@ async function classifyCreators(creators) {
 // The only creators worth copying: a real person speaking to camera, filmed
 // plainly. Skits need actors, costumes, and scenes — Sarah can't do those, so
 // a skit creator is off the list however well their videos perform.
+// Must match OUTLIER_X in lib/discover.js. If the two drift, a creator badged
+// "0 breakouts" starts feeding videos into the shortlist.
+const OUTLIER_X = 3;
+
 function isUsable(c) {
   return c.onCamera === 'talking_head' && c.production !== 'skit';
 }
@@ -1978,22 +1983,26 @@ const CAM_LABEL = {
 
 function creatorRowHTML(c, rerenderFn) {
   const starred = isStarred(c.handle);
-  const hot = c.reachRatio >= 1;  // median views beat their own follower count
+  const hot = c.reachRatio >= 1;      // median views beat their own follower count
+  const n = c.outlierCount || 0;
+  const repeats = n >= 3;             // broken out enough times to be a pattern
   return `
     <div class="creator-row ${starred ? 'starred' : ''}">
       <div class="creator-main" onclick="showCreatorDetail('${c.handle}')">
         <div class="creator-handle">
           @${c.handle}
+          ${repeats ? `<span class="tag repeat">${n} breakouts</span>` : ''}
           <span class="tag ${c.style}">${c.style}</span>
           ${hot ? '<span class="tag hot">punching up</span>' : ''}
         </div>
         <div class="creator-stats">
-          <span class="metric">${fmtNum(c.medianViews)}</span> median views ·
+          <span class="metric">${n}</span> breakout${n === 1 ? '' : 's'} in
+          <span class="metric">${c.sampled}</span> posts
+          ${n ? `· best <span class="metric">${c.outlierRatio}×</span> their normal
+                 (<span class="metric">${fmtNum(c.topViews)}</span> views)` : '· no post beat their own average'}<br>
+          <span class="metric">${fmtNum(c.medianViews)}</span> median ·
           <span class="metric">${fmtNum(c.followers)}</span> followers ·
-          <span class="metric">${c.reachRatio}×</span> reach per follower<br>
-          best post <span class="metric">${fmtNum(c.topViews)}</span>
-          (<span class="metric">${c.outlierRatio}×</span> their normal) ·
-          ${c.outlierCount} outlier${c.outlierCount === 1 ? '' : 's'} in ${c.sampled} posts
+          <span class="metric">${c.reachRatio}×</span> reach per follower
         </div>
         ${c.bio ? `<div class="creator-bio">${c.bio}</div>` : ''}
       </div>
@@ -2005,9 +2014,16 @@ function showCreators() {
   const all = loadCreators();
   // Only plain talking heads. Everything else is hidden rather than deleted, so
   // the count below stays honest about what the scan actually found.
+  // Same order as the API: breakout rate first. A creator who broke out four
+  // times has a format that repeats; one who never has is just a healthy
+  // account, and reach alone would put them on top.
   const styleRank = c => (c.style === 'tutorial' ? 0 : c.style === 'mixed' ? 1 : 2);
-  const creators = all.filter(isUsable)
-    .sort((a, b) => (styleRank(a) - styleRank(b)) || (b.reachRatio - a.reachRatio));
+  const rate = c => c.outlierRate ?? (c.sampled ? (c.outlierCount || 0) / c.sampled : 0);
+  const creators = all.filter(isUsable).sort((a, b) =>
+       (styleRank(a) - styleRank(b))
+    || (rate(b) - rate(a))
+    || (b.outlierRatio - a.outlierRatio)
+    || (b.reachRatio - a.reachRatio));
 
   const hidden = all.length - creators.length;
   const scanned = localStorage.getItem('kf_creators_date');
@@ -2016,8 +2032,8 @@ function showCreators() {
     ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} usable · ${starredCount} shortlisted`, true, 'Talking-head creators')}
     <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
       One person speaking to camera, no skits — the only kind Sarah can
-      recreate. Ranked by reach per follower, so a small account pulling big
-      views rises. Star the ones worth copying.
+      recreate. Ranked by how often they break out: a creator who beat their own
+      average ${OUTLIER_X}× more than once has a format that repeats. Star 3 or 4.
     </div>
     <div class="creator-list">
       ${all.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">Nothing scanned yet. Run a discovery sweep first.</p>` : ''}
@@ -2090,7 +2106,7 @@ function showShortlist() {
   const videos = [];
   creators.forEach(c => {
     (c.topVideos || []).forEach(v => {
-      if (v.multiple >= 2) videos.push({ ...v, handle: c.handle, style: c.style });
+      if (v.multiple >= OUTLIER_X) videos.push({ ...v, handle: c.handle, style: c.style });
     });
   });
   videos.sort((a, b) => b.multiple - a.multiple);
@@ -2098,8 +2114,8 @@ function showShortlist() {
   document.getElementById('app').innerHTML = `
     ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} creators · ${videos.length} outlier videos`, true, 'Shortlist')}
     <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
-      Outlier posts (2× that creator's own normal or better) from your starred
-      creators. Biggest multiple first.
+      Posts that beat their own creator's average by ${OUTLIER_X}× or more, from
+      the creators you starred. Biggest multiple first.
     </div>
     <div class="creator-list">
       ${videos.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">
@@ -2230,7 +2246,7 @@ function showHome() {
   const usable = creators.filter(isUsable);
   const shortlistCount = usable
     .filter(c => starred.includes(c.handle))
-    .reduce((n, c) => n + (c.topVideos || []).filter(v => v.multiple >= 2).length, 0);
+    .reduce((n, c) => n + (c.topVideos || []).filter(v => v.multiple >= OUTLIER_X).length, 0);
 
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, false, ANY_LEGACY_STAGE ? 'Katie Formats' : 'Katie Formats')}
