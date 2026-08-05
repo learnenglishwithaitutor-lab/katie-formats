@@ -210,6 +210,7 @@
     .tag.cam-unclear { background: rgba(0,0,0,0.04); color: var(--muted); }
     .tag.skit { background: rgba(186,117,23,0.14); color: #96601a; }
     .tag.repeat { background: rgba(29,158,117,0.14); color: #1D9E75; }
+    .tag.mine { background: rgba(55,138,221,0.13); color: #2a6cb0; margin-left: 6px; font-size: 8.5px; padding: 2px 6px; vertical-align: 1px; }
     .metric { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
     .vid-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); align-items: flex-start; }
     .vid-row:last-child { border-bottom: none; }
@@ -255,7 +256,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v55';
+const APP_VERSION = 'v56';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1946,8 +1947,11 @@ async function deepScanCandidates() {
   await deepScan(handles);
 }
 
-async function deepScan(handles) {
-  showDiscoverLoading('Checking their numbers…', `${handles.length} creators, ~24 posts each`, 2);
+async function deepScan(handles, opts = {}) {
+  const mine = !!opts.mine;
+  showDiscoverLoading(
+    mine ? `Checking @${handles[0]}…` : 'Checking their numbers…',
+    mine ? 'reading their last 24 posts' : `${handles.length} creators, ~24 posts each`, 2);
   try {
     const res = await fetch('/api/apify?action=profiles', {
       method: 'POST',
@@ -1961,17 +1965,45 @@ async function deepScan(handles) {
     const cRes = await fetch(`/api/apify?action=creators&datasetId=${datasetId}`);
     const cData = await cRes.json();
     if (!cData.creators) throw new Error(cData.error || 'No creators returned');
+    if (mine && !cData.creators.length) {
+      throw new Error(`No posts found for @${handles[0]}. Check the spelling — a private or empty account returns nothing.`);
+    }
 
     // Look at the covers before showing anything — captions can't tell a real
     // person on camera from a faceless slideshow, and that's the split that
     // decides which track a creator belongs to.
     const classified = await classifyCreators(cData.creators);
-    saveCreators(classified);
+    // Someone you added by hand is yours: keep the verdict visible, but never
+    // let the talking-head filter quietly drop a creator you chose deliberately.
+    saveCreators(mine ? classified.map(c => ({ ...c, addedByMe: true })) : classified);
+    if (mine) {
+      const s = loadStarred();
+      classified.forEach(c => { if (!s.includes(c.handle)) s.push(c.handle); });
+      saveStarred(s);
+    }
     showCreators();
   } catch (err) {
-    alert('Deep scan failed: ' + err.message);
-    showHome();
+    alert((mine ? "Couldn't add that creator: " : 'Deep scan failed: ') + err.message);
+    if (mine) showCreators(); else showHome();
   }
+}
+
+// Add a creator you already know about. Accepts a handle, @handle, or a URL.
+async function addMyCreator() {
+  const input = document.getElementById('add-creator');
+  const raw = (input?.value || '').trim();
+  if (!raw) return;
+  const handle = (raw.match(/@?([A-Za-z0-9._]+)\s*$/) || [])[1];
+  if (!handle) return alert('That does not look like a TikTok handle.');
+
+  if (loadCreators().some(c => c.handle.toLowerCase() === handle.toLowerCase())) {
+    const s = loadStarred();
+    if (!s.includes(handle)) { s.push(handle); saveStarred(s); }
+    input.value = '';
+    return showCreators();
+  }
+  input.value = '';
+  await deepScan([handle], { mine: true });
 }
 
 // Walks the creator list in small batches so no single request runs past
@@ -2029,6 +2061,7 @@ async function classifyCreators(creators) {
 const OUTLIER_X = 3;
 
 function isUsable(c) {
+  if (c.addedByMe) return true;   // you picked them; the filter doesn't overrule you
   return c.onCamera === 'talking_head' && c.production !== 'skit';
 }
 
@@ -2085,8 +2118,8 @@ function creatorRowHTML(c, rerenderFn) {
         <div class="row-top">
           ${thumb ? `<img class="row-thumb" src="${thumb}" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.visibility='hidden'" />` : '<div class="row-thumb"></div>'}
           <div class="row-id">
-            <div class="row-handle">@${c.handle}</div>
-            <div class="row-sub">${fmtNum(c.followers)} followers</div>
+            <div class="row-handle">@${c.handle}${c.addedByMe ? '<span class="tag mine">yours</span>' : ''}</div>
+            <div class="row-sub">${fmtNum(c.followers)} followers${c.addedByMe && c.onCamera !== 'talking_head' ? ` · ${CAM_LABEL[c.onCamera || 'unclear']}` : ''}${c.addedByMe && c.production === 'skit' ? ' · skits' : ''}</div>
           </div>
           <div class="row-score ${n ? '' : 'none'}">
             <span class="row-score-n">${n}</span>
@@ -2124,19 +2157,27 @@ function showCreators() {
   const starredCount = loadStarred().length;
   document.getElementById('app').innerHTML = `
     ${headerHTML(localStorage.getItem('kf_pulled'), `${starredCount} starred`, true, 'Creators')}
+    <div class="add-row" style="margin-bottom:10px;">
+      <input class="add-input" id="add-creator" type="text" autocapitalize="off"
+             autocorrect="off" spellcheck="false" placeholder="Add a creator you already know" />
+      <button class="add-btn" onclick="addMyCreator()">Add</button>
+    </div>
     ${creators.length ? `<div class="legend">
       <span><i class="sw hit"></i> beat their average ${OUTLIER_X}×</span>
       <span><i class="sw bar"></i> normal post</span>
       <span>★ to shortlist</span>
     </div>` : ''}
     <div class="creator-list">
-      ${all.length === 0 ? `<div class="blank"><div class="blank-icon">🔎</div>Nothing found yet.<br>Run a search from Home.</div>` : ''}
+      ${all.length === 0 ? `<div class="blank"><div class="blank-icon">🔎</div>Nothing found yet.<br>Run a search from Home, or add someone above.</div>` : ''}
       ${all.length > 0 && creators.length === 0 ? `<div class="blank"><div class="blank-icon">🚫</div>
-        None of the ${all.length} creators are plain talking heads.<br>Try different keywords.</div>` : ''}
+        None of the ${all.length} creators are plain talking heads.<br>Try different keywords, or add someone above.</div>` : ''}
       ${creators.map(c => creatorRowHTML(c, 'showCreators')).join('')}
       ${hidden > 0 ? `<div class="list-foot">${hidden} hidden · faceless or skits</div>` : ''}
     </div>
     <button class="btn-secondary" onclick="showHome()" style="margin-top:0;">← Home</button>`;
+
+  document.getElementById('add-creator')
+    ?.addEventListener('keydown', e => { if (e.key === 'Enter') addMyCreator(); });
 }
 
 function showCreatorDetail(handle) {
