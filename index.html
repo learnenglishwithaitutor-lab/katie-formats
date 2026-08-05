@@ -161,6 +161,10 @@
     .tag.emotional { background: rgba(186,117,23,0.14); color: #96601a; }
     .tag.mixed, .tag.unknown { background: rgba(0,0,0,0.06); color: var(--muted); }
     .tag.hot { background: rgba(226,75,74,0.12); color: #c23b3a; }
+    .tag.cam-talking_head { background: rgba(55,138,221,0.14); color: #2a6cb0; }
+    .tag.cam-faceless { background: rgba(0,0,0,0.06); color: var(--muted); }
+    .tag.cam-mixed { background: rgba(126,102,196,0.14); color: #5c47a0; }
+    .tag.cam-unclear { background: rgba(0,0,0,0.04); color: var(--muted); }
     .metric { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
     .vid-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); align-items: flex-start; }
     .vid-row:last-child { border-bottom: none; }
@@ -192,7 +196,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v49';
+const APP_VERSION = 'v50';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -1859,12 +1863,63 @@ async function deepScan(handles) {
     const cRes = await fetch(`/api/apify?action=creators&datasetId=${datasetId}`);
     const cData = await cRes.json();
     if (!cData.creators) throw new Error(cData.error || 'No creators returned');
-    saveCreators(cData.creators);
+
+    // Look at the covers before showing anything — captions can't tell a real
+    // person on camera from a faceless slideshow, and that's the split that
+    // decides which track a creator belongs to.
+    const classified = await classifyCreators(cData.creators);
+    saveCreators(classified);
     showCreators();
   } catch (err) {
     alert('Deep scan failed: ' + err.message);
     showHome();
   }
+}
+
+// Walks the creator list in small batches so no single request runs past
+// Vercel's 60s function ceiling.
+async function classifyCreators(creators) {
+  const BATCH = 4;
+  const byHandle = {};
+  let done = 0;
+
+  setDiscoverStatus('Looking at their videos…', `0 / ${creators.length} creators`);
+
+  for (let i = 0; i < creators.length; i += BATCH) {
+    const batch = creators.slice(i, i + BATCH);
+    try {
+      const res = await fetch('/api/apify?action=classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creators: batch.map(c => ({
+            handle: c.handle,
+            topVideos: (c.topVideos || []).map(v => ({ thumbnail: v.thumbnail }))
+          })),
+          frames: 3
+        })
+      });
+      const data = await res.json();
+      (data.results || []).forEach(r => { byHandle[r.handle] = r; });
+    } catch (e) {
+      // A failed batch just leaves those creators unclassified — the scan's
+      // numbers are still worth showing.
+      console.error('classify batch failed', e);
+    }
+    done += batch.length;
+    setDiscoverStatus(null, `${Math.min(done, creators.length)} / ${creators.length} creators`);
+  }
+
+  return creators.map(c => {
+    const v = byHandle[c.handle];
+    return {
+      ...c,
+      onCamera: v?.format || 'unclear',
+      onCameraNote: v?.note || '',
+      onCameraCount: v?.onCameraCount ?? null,
+      framesSeen: v?.framesSeen ?? null
+    };
+  });
 }
 
 // Also lets you deep scan the accounts already in Settings.
@@ -1874,14 +1929,24 @@ async function deepScanTracked() {
   await deepScan(handles);
 }
 
+// How the on-camera verdict reads on a row.
+const CAM_LABEL = {
+  talking_head: 'talking head',
+  faceless: 'faceless',
+  mixed: 'half on camera',
+  unclear: 'unknown'
+};
+
 function creatorRowHTML(c, rerenderFn) {
   const starred = isStarred(c.handle);
   const hot = c.reachRatio >= 1;  // median views beat their own follower count
+  const cam = c.onCamera || 'unclear';
   return `
     <div class="creator-row ${starred ? 'starred' : ''}">
       <div class="creator-main" onclick="showCreatorDetail('${c.handle}')">
         <div class="creator-handle">
           @${c.handle}
+          <span class="tag cam-${cam}">${CAM_LABEL[cam]}</span>
           <span class="tag ${c.style}">${c.style}</span>
           ${hot ? '<span class="tag hot">punching up</span>' : ''}
         </div>
@@ -1900,14 +1965,26 @@ function creatorRowHTML(c, rerenderFn) {
 }
 
 function showCreators() {
-  const creators = loadCreators();
+  // Talking-head tutorial creators first — that's the track being automated.
+  // Faceless accounts sink whatever their numbers look like.
+  const camRank = c => (c.onCamera === 'talking_head' ? 0
+                      : c.onCamera === 'mixed' ? 1
+                      : c.onCamera === 'unclear' ? 2 : 3);
+  const styleRank = c => (c.style === 'tutorial' ? 0 : c.style === 'mixed' ? 1 : 2);
+  const creators = loadCreators().sort((a, b) =>
+       (camRank(a) - camRank(b))
+    || (styleRank(a) - styleRank(b))
+    || (b.reachRatio - a.reachRatio));
+
   const scanned = localStorage.getItem('kf_creators_date');
   const starredCount = loadStarred().length;
+  const heads = creators.filter(c => c.onCamera === 'talking_head').length;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} scanned · ${starredCount} shortlisted`, true, 'Creators by outlier')}
+    ${headerHTML(localStorage.getItem('kf_pulled'), `${creators.length} scanned · ${heads} talking head · ${starredCount} shortlisted`, true, 'Creators by outlier')}
     <div style="font-size:11px;color:var(--muted);padding:0 0 10px;line-height:1.5;">
-      Ranked by reach per follower — a small account pulling big views means the
-      <em>format</em> is winning, not the audience. Star the ones worth copying.
+      Talking-head tutorial creators first, then by reach per follower — a small
+      account pulling big views means the <em>format</em> is winning, not the
+      audience. Star the ones worth copying.
     </div>
     <div class="creator-list">
       ${creators.length === 0 ? `<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px;">Nothing scanned yet. Run a discovery sweep first.</p>` : ''}
@@ -1926,6 +2003,7 @@ function showCreatorDetail(handle) {
     <div style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;">
       <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">
         <div class="creator-handle">${c.nickname || '@' + c.handle}
+          <span class="tag cam-${c.onCamera || 'unclear'}">${CAM_LABEL[c.onCamera || 'unclear']}</span>
           <span class="tag ${c.style}">${c.style}</span>
         </div>
         <div class="creator-stats">
@@ -1935,6 +2013,10 @@ function showCreatorDetail(handle) {
           reach <span class="metric">${c.reachRatio}×</span> per follower ·
           ${Math.round(c.tutorialShare * 100)}% tutorial captions
         </div>
+        ${c.onCameraNote ? `<div class="creator-stats" style="margin-top:6px;">
+          <strong>On camera:</strong> ${c.onCameraNote}
+          ${c.framesSeen ? ` (${c.onCameraCount}/${c.framesSeen} frames)` : ''}
+        </div>` : ''}
         ${c.bio ? `<div class="creator-stats" style="margin-top:8px;">${c.bio}</div>` : ''}
         <button class="btn-secondary" onclick="toggleStar('${c.handle}', function(){showCreatorDetail('${c.handle}')})" style="margin-top:12px;">
           ${starred ? '★ Shortlisted — tap to remove' : '☆ Add to shortlist'}
@@ -1968,7 +2050,7 @@ function showShortlist() {
   const videos = [];
   creators.forEach(c => {
     (c.topVideos || []).forEach(v => {
-      if (v.multiple >= 2) videos.push({ ...v, handle: c.handle, style: c.style });
+      if (v.multiple >= 2) videos.push({ ...v, handle: c.handle, style: c.style, onCamera: c.onCamera });
     });
   });
   videos.sort((a, b) => b.multiple - a.multiple);
@@ -1988,6 +2070,7 @@ function showShortlist() {
           <div class="creator-main">
             <div class="creator-handle" style="font-size:12px;">@${v.handle}
               <span class="tag hot">${v.multiple}×</span>
+              <span class="tag cam-${v.onCamera || 'unclear'}">${CAM_LABEL[v.onCamera || 'unclear']}</span>
               <span class="tag ${v.style}">${v.style}</span>
             </div>
             <div class="vid-caption" style="margin-top:5px;">${(v.caption || 'No caption').replace(/</g, '&lt;')}</div>

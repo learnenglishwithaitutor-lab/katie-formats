@@ -1,4 +1,5 @@
 import { DISCOVER_ACTIONS, handleDiscover } from '../lib/discover.js';
+import { CLASSIFY_ACTIONS, handleClassify } from '../lib/classify.js';
 
 const ACTOR_ID = 'GdWCkxBtKWOsKjdch';
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
@@ -18,9 +19,11 @@ export default async function handler(req, res) {
 
   const { action, runId, datasetId } = req.query;
 
-  // Creator discovery shares this endpoint (and this actor) so it doesn't
-  // spend one of the 12 serverless-function slots. See lib/discover.js.
+  // Creator discovery and cover classification share this endpoint so they
+  // don't spend the remaining serverless-function slots (the plan caps at 12).
+  // See lib/discover.js and lib/classify.js.
   if (DISCOVER_ACTIONS.includes(action)) return handleDiscover(req, res);
+  if (CLASSIFY_ACTIONS.includes(action)) return handleClassify(req, res);
 
   try {
     if (action === 'start') {
