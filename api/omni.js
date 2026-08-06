@@ -452,5 +452,109 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── generateIngredients ──────────────────────────────────────
+  // The IMAGE-DRIVEN route (Miko's image-prompt method), added 2026-08-06.
+  //
+  // ADDITIVE ONLY. It is a new `action`; `generate`, `status`, `stitch`,
+  // `analyze`, `prompt` and `firstframe` are untouched and behave exactly as
+  // before. Nothing above this block was modified. It lives here rather than in
+  // its own file because Vercel's Hobby plan caps a deployment at 12 serverless
+  // functions and this app is already at the cap — a separate endpoint built
+  // fine but could not deploy.
+  //
+  // Driven by a STILL image rather than a base video, so it can animate a
+  // generated Sarah variant, and it can pin the voice with a black-screen
+  // audio-only clip (Flow's own voices being unusable is the whole reason).
+  //
+  // kie.ai gemini-omni-video (docs.kie.ai/market/gemini-omni-video):
+  //   image_urls   up to 7 public URLs
+  //   video_list   max 1 video, <=30s, trim range <=10s
+  //   duration     IGNORED whenever a video is supplied
+  //   quota        images + videos*2 + character_ids <= 7
+  if (action === 'generateIngredients') {
+    if (!KIE_TOKEN) return res.status(500).json({ error: 'KIE_API_TOKEN not set' });
+    try {
+      const prompt = body.prompt;
+      const images = Array.isArray(body.images) ? body.images : [];
+      const voiceVideo = body.voiceVideo || null;
+      const aspectRatio = body.aspectRatio || '9:16';
+      const resolution = body.resolution || '720p';
+      const trim = body.trim || null;
+
+      if (!prompt || !String(prompt).trim()) {
+        return res.status(400).json({ error: 'prompt is required' });
+      }
+      if (!images.length) {
+        return res.status(400).json({ error: "images[] is required — this action is image-driven. Use action='generate' for the base-video route." });
+      }
+      if (images.length > 7) return res.status(400).json({ error: 'at most 7 images' });
+
+      // Check quota BEFORE uploading, so an over-quota request fails fast
+      // instead of after several uploads have already been paid for.
+      const cost = images.length + (voiceVideo ? 2 : 0);
+      if (cost > 7) {
+        return res.status(400).json({ error: `quota exceeded: ${images.length} image(s) + ${voiceVideo ? 1 : 0} video = ${cost} units, max 7` });
+      }
+
+      // Each asset may be a public URL (used as-is) or base64 (uploaded).
+      const resolveAsset = async (asset, kind, i) => {
+        if (typeof asset === 'string' && /^https?:\/\//.test(asset)) return asset;
+        if (typeof asset !== 'string' || !asset.length) {
+          throw new Error(`${kind}[${i}]: expected a public URL or a base64 string`);
+        }
+        const isVideo = kind === 'video';
+        return uploadToKie(
+          Buffer.from(asset, 'base64'),
+          isVideo ? 'video/mp4' : 'image/png',
+          `${kind}_${Date.now()}_${i}.${isVideo ? 'mp4' : 'png'}`
+        );
+      };
+
+      const image_urls = [];
+      for (let i = 0; i < images.length; i++) {
+        image_urls.push(await resolveAsset(images[i], 'image', i));
+      }
+
+      const input = { prompt, image_urls, aspect_ratio: aspectRatio, resolution };
+
+      if (voiceVideo) {
+        const url = await resolveAsset(voiceVideo, 'video', 0);
+        const start = Number(trim?.start ?? 0);
+        const ends = Number(trim?.ends ?? 10);
+        if (!(ends > start) || ends - start > 10) {
+          return res.status(400).json({ error: 'trim range must satisfy 0 < ends-start <= 10' });
+        }
+        input.video_list = [{ url, start, ends }];
+        // `duration` is deliberately omitted here: the model ignores it once a
+        // video is present, and sending it would imply a control we lack.
+      } else {
+        input.duration = String(Math.min(10, Math.max(4, Number(body.duration) || 10)));
+      }
+
+      const kieRes = await fetch(KIE_CREATE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${KIE_TOKEN}` },
+        body: JSON.stringify({ model: 'gemini-omni-video', input })
+      });
+      if (!kieRes.ok) throw new Error(`kie.ai createTask failed (${kieRes.status}): ${await kieRes.text()}`);
+      const data = await kieRes.json();
+      if (data.code && data.code !== 200) throw new Error(`kie.ai: ${data.msg || 'createTask error'} (code ${data.code})`);
+      const taskId = data?.data?.taskId;
+      if (!taskId) throw new Error(`kie.ai: no taskId. Response: ${JSON.stringify(data)}`);
+
+      // Poll with the SAME action=status the existing route uses — no new plumbing.
+      return res.status(200).json({
+        taskId,
+        sent: {
+          images: image_urls.length,
+          voiceVideo: Boolean(voiceVideo),
+          durationControlledBy: voiceVideo ? 'voiceVideo length (duration ignored by the model)' : `duration=${input.duration}`
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   return res.status(400).json({ error: 'Unknown action' });
 }
