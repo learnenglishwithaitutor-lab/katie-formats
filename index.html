@@ -86,6 +86,30 @@
     .screen-chip { font-size: 10px; color: var(--muted); border: 0.5px solid var(--muted); border-radius: 999px; padding: 2px 8px; }
     .screen-chip.listicle { color: #5DCAA5; border-color: #5DCAA5; }
 
+    /* Why-skip sheet */
+    .why-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
+    .why-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; background: var(--surface);
+      border-top-left-radius: 18px; border-top-right-radius: 18px; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.35); max-height: 85vh; overflow-y: auto; }
+    .why-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .why-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .why-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; margin-bottom: 8px;
+      border-radius: 12px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text);
+      font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .why-opt.sel { border-color: var(--approve); box-shadow: inset 0 0 0 1px var(--approve); }
+    .why-opt small { display: block; font-weight: 400; font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .why-input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 0.5px solid var(--border);
+      background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; margin-top: 4px; }
+    .why-recent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .why-recent button { font-size: 11px; color: var(--muted); background: none; border: 0.5px solid var(--border);
+      border-radius: 999px; padding: 5px 10px; font-family: inherit; cursor: pointer; }
+    .why-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .why-actions button { flex: 1; padding: 13px; border-radius: 12px; font-family: inherit; font-size: 14px;
+      font-weight: 600; cursor: pointer; }
+    .why-cancel { border: 0.5px solid var(--border); background: var(--bg); color: var(--muted); }
+    .why-go { border: none; background: var(--reject); color: #fff; }
+    .why-go[disabled] { opacity: 0.4; }
+
     /* Stamps */
     .stamp { position: absolute; top: 28px; font-size: 28px; font-weight: 900; padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; z-index: 10; letter-spacing: 3px; text-transform: uppercase; }
     .stamp.approve { left: 18px; color: #1D9E75; border: 4px solid #1D9E75; transform: rotate(-15deg); background: rgba(255,255,255,0.9); }
@@ -260,7 +284,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v56';
+const APP_VERSION = 'v57';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -427,13 +451,107 @@ function showFallback(vf, url) {
   vf.innerHTML = `<div class="video-loading"><span>Preview unavailable</span><a class="watch-link" href="${url}" target="_blank">Watch on TikTok →</a></div>`;
 }
 
+// ── Why-skip ───────────────────────────────────────────────────
+// A rejection is only useful later if we know which kind it was. Three kinds,
+// and they mean opposite things: a new standing rule, the screener getting
+// this one wrong, or a one-off with no lesson in it. Lumped together they
+// cancel each other out — the engine that reads these is task #6.
+const WHY_KINDS = [
+  { id: 'rule',       label: 'Never show me these again',
+    hint: 'A standing rule — the whole kind of video is wrong for us' },
+  { id: 'correction', label: 'The filter got this one wrong',
+    hint: 'It should have caught this — a skit, a repeat, British English' },
+  { id: 'oneoff',     label: 'Just this one',
+    hint: 'Nothing to learn from — fine idea, wrong video' }
+];
+
+let whyPick = null;
+
+function loadRecentReasons() {
+  try { return JSON.parse(localStorage.getItem('kf_recent_reasons') || '[]'); } catch(e) { return []; }
+}
+// Typing on a phone is friction, and friction is what kills feedback loops.
+// Reasons already used come back as one-tap chips, newest first.
+function rememberReason(text) {
+  if (!text) return;
+  const list = [text, ...loadRecentReasons().filter(r => r !== text)].slice(0, 8);
+  localStorage.setItem('kf_recent_reasons', JSON.stringify(list));
+}
+
+function openWhySheet() {
+  whyPick = null;
+  const recent = loadRecentReasons();
+  const el = document.createElement('div');
+  el.id = 'why-wrap';
+  el.innerHTML = `
+    <div class="why-backdrop" onclick="closeWhySheet()"></div>
+    <div class="why-sheet">
+      <div class="why-title">Why skip it?</div>
+      <div class="why-sub">${formats[current]?.topic || formats[current]?.title?.slice(0, 60) || ''}</div>
+      ${WHY_KINDS.map(k => `
+        <button class="why-opt" id="why-${k.id}" onclick="pickWhy('${k.id}')">
+          ${k.label}<small>${k.hint}</small>
+        </button>`).join('')}
+      <input class="why-input" id="why-text" type="text" placeholder="In your words (optional)" />
+      ${recent.length ? `<div class="why-recent">${recent.map(r =>
+        `<button onclick="useReason(this.textContent)">${r}</button>`).join('')}</div>` : ''}
+      <div class="why-actions">
+        <button class="why-cancel" onclick="closeWhySheet()">Cancel</button>
+        <button class="why-go" id="why-go" disabled onclick="confirmWhy()">Skip it</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function pickWhy(id) {
+  whyPick = id;
+  WHY_KINDS.forEach(k => document.getElementById('why-' + k.id)?.classList.toggle('sel', k.id === id));
+  const go = document.getElementById('why-go');
+  if (go) go.disabled = false;
+}
+
+function useReason(text) {
+  const input = document.getElementById('why-text');
+  if (input) input.value = text;
+}
+
+function closeWhySheet() {
+  document.getElementById('why-wrap')?.remove();
+  // The card was dragged part-way off before the sheet opened — put it back.
+  const card = document.getElementById('card');
+  if (card) card.style.transform = '';
+  ['stamp-a','stamp-r','bg-overlay'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.opacity = 0;
+  });
+}
+
+function confirmWhy() {
+  const reason = document.getElementById('why-text')?.value.trim() || '';
+  const kind = whyPick;
+  rememberReason(reason);
+  document.getElementById('why-wrap')?.remove();
+  doSwipe('left', { kind, reason });
+}
+
 // ── Stage 1: Swipe ─────────────────────────────────────────────
+// Rejecting asks why first; approving doesn't. An approval carries no
+// information beyond itself, and stopping to explain every yes would make
+// swiping through sixty videos unbearable.
 function swipe(dir) {
   if (current >= formats.length) return;
+  if (dir === 'left') { openWhySheet(); return; }
+  doSwipe(dir, null);
+}
+
+function doSwipe(dir, why) {
+  if (current >= formats.length) return;
   const card = document.getElementById('card');
+  // A drag leaves an inline transform behind, and inline beats the class the
+  // fly-away animation uses. Clear it or the card just sits there.
+  card.style.transform = '';
   card.classList.add('animating', dir === 'right' ? 'fly-right' : 'fly-left');
   if (dir === 'right') approved.push(formats[current]);
-  else rejected.push(formats[current]);
+  else rejected.push({ ...formats[current], whyKind: why?.kind || '', whyReason: why?.reason || '' });
   current++;
   setTimeout(() => {
     card.classList.remove('animating','fly-right','fly-left');
@@ -444,8 +562,41 @@ function swipe(dir) {
   }, 400);
 }
 
+// Send the whole session's swipes to the Decisions tab. Fire and forget: a
+// failed log must never block the review, but it is retried once, because a
+// lost rejection is a lesson gone for good.
+//
+// Reviewing the same batch again appends a second row rather than replacing
+// the first. Changing your mind is itself worth knowing about, so whoever
+// reads this later takes the newest row per video and keeps the rest.
+async function logDecisions() {
+  const rows = [
+    ...approved.map(f => ({ ...f, swipe: 'approve' })),
+    ...rejected.map(f => ({ ...f, swipe: 'reject' }))
+  ].map(f => ({
+    url: f.url, author: f.author, topic: f.topic || '', contentType: f.contentType || '',
+    screenerVerdict: 'keep', screenerReasons: '',
+    swipe: f.swipe, whyKind: f.whyKind || '', whyReason: f.whyReason || ''
+  }));
+  if (!rows.length) return;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch('/api/sheets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'decisions', rows })
+      });
+      const data = await res.json();
+      if (data.ok) { localStorage.removeItem('kf_unlogged'); return; }
+    } catch (e) {}
+  }
+  // Out of retries — keep them on the phone so nothing is silently lost.
+  localStorage.setItem('kf_unlogged', JSON.stringify(rows));
+}
+
 // ── Stage 1: Done ──────────────────────────────────────────────
 function showStage1Done() {
+  logDecisions();
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Format review')}
@@ -453,6 +604,14 @@ function showStage1Done() {
       <div class="check">✓</div>
       <h2>Formats reviewed</h2>
       <p>${approved.length} approved · ${rejected.length} skipped</p>
+      ${rejected.filter(r => r.whyKind).length ? `
+        <div class="approved-list" style="margin-bottom:14px;">
+          ${rejected.filter(r => r.whyKind).map(r => `
+            <div class="approved-item">
+              <span class="t">${r.whyReason || r.topic || r.title}</span>
+              <span class="v">${(WHY_KINDS.find(k => k.id === r.whyKind) || {}).label?.split(' ')[0] || ''}</span>
+            </div>`).join('')}
+        </div>` : ''}
       ${approved.length > 0 ? `
         <div class="approved-list">
           ${approved.map(f => `<div class="approved-item"><span class="t">${f.title}</span><span class="v">♥ ${f.views}</span></div>`).join('')}
@@ -2428,7 +2587,9 @@ function removeKeyword(i) {
 //    SCRIPT_STAGE_ENABLED  generate + swipe scripts         (Stage 2)
 //    OMNI_STAGE_ENABLED    generate videos via kie.ai       (Stage 3)
 // ══════════════════════════════════════════════════════════════════
-const SWIPE_STAGE_ENABLED  = false;
+// Back on: the app approves videos again. Creators are vetted by hand now, so
+// the discovery screens below it are the parked ones — see lib/discover.js.
+const SWIPE_STAGE_ENABLED  = true;
 const SCRIPT_STAGE_ENABLED = false;
 const OMNI_STAGE_ENABLED   = false;
 

@@ -82,6 +82,55 @@ export default async function handler(req, res) {
 
   const action = req.method === 'GET' ? req.query.action : (req.body?.action);
 
+  // ── action=decisions: append one row per swipe to the Decisions tab ──
+  //
+  // Append-only, deliberately. This is the record the learning loop will be
+  // measured against later: when a proposed rule is replayed to see what it
+  // would have dropped, this is what it replays over. Editing or overwriting
+  // rows would quietly rewrite the past and make that check meaningless.
+  //
+  // Columns: When | VideoURL | Author | Topic | ContentType | ScreenerVerdict |
+  //          ScreenerReasons | Swipe | WhyKind | WhyReason
+  if (action === 'decisions') {
+    try {
+      const rows = req.body?.rows || [];
+      if (!rows.length) return res.status(400).json({ error: 'no rows' });
+      const token = await getAccessToken();
+      await ensureTab(token, 'Decisions');
+
+      const head = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!A1:J1`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+
+      const values = [];
+      if (!head.values || !head.values.length) {
+        values.push(['When', 'VideoURL', 'Author', 'Topic', 'ContentType',
+                     'ScreenerVerdict', 'ScreenerReasons', 'Swipe', 'WhyKind', 'WhyReason']);
+      }
+      const when = new Date().toISOString();
+      for (const r of rows) {
+        values.push([
+          when, r.url || '', r.author || '', r.topic || '', r.contentType || '',
+          r.screenerVerdict || 'keep', r.screenerReasons || '',
+          r.swipe || '', r.whyKind || '', r.whyReason || ''
+        ]);
+      }
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values })
+        }
+      );
+      return res.status(200).json({ ok: true, logged: rows.length });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=queue: write the work order (approved batch) to the Queue tab ──
   // Columns: ID | VideoURL | Author | Script | Status | PromptPngLink | OutputUrl
   if (action === 'queue') {
