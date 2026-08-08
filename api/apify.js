@@ -44,10 +44,19 @@ function rankVideos(items, monthsBack = RECENCY_MONTHS) {
     // The median comes from everything scraped, not just the recent slice —
     // a creator's normal is better measured over the longer run, and a burst
     // of recent hits shouldn't quietly raise the bar it's being judged by.
-    const med = median(byAuthor[author].map(i => i.playCount || 0).filter(Boolean));
+    const med = median(
+      byAuthor[author]
+        .filter(i => !i.isAd && !i.isSponsored)
+        .map(i => i.playCount || 0)
+        .filter(Boolean)
+    );
 
     for (const item of byAuthor[author]) {
       if (postedAt(item) < cutoff) continue;
+      // Promos and sponsored posts get paid reach, so they top the outlier
+      // ranking without teaching anything — the biggest "breakout" in the
+      // first real run was a creator advertising their own app at 300x median.
+      if (item.isAd || item.isSponsored) continue;
       const views = item.playCount || 0;
       videos.push({
         title:      item.text || item.desc || 'No caption',
