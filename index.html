@@ -81,6 +81,10 @@
     .comments-link { font-size: 12px; color: #5DCAA5; text-decoration: none; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
     .card-title { font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--text); word-break: break-word; }
     .views { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .screen-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .screen-topic { font-size: 11px; font-weight: 600; color: var(--text); }
+    .screen-chip { font-size: 10px; color: var(--muted); border: 0.5px solid var(--muted); border-radius: 999px; padding: 2px 8px; }
+    .screen-chip.listicle { color: #5DCAA5; border-color: #5DCAA5; }
 
     /* Stamps */
     .stamp { position: absolute; top: 28px; font-size: 28px; font-weight: 900; padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; z-index: 10; letter-spacing: 3px; text-transform: uppercase; }
@@ -267,11 +271,11 @@ let scripts = [];       // [{format, script}, ...]
 let scriptCurrent = 0;
 const approvedScripts = [], rejectedScripts = [];
 
+// Creators Ashitha has vetted by hand. The app no longer judges whether a
+// creator is worth following — only whether a given video is worth remaking.
 const DEFAULT_ACCOUNTS = [
-  'https://www.tiktok.com/@starvicks51',
-  'https://www.tiktok.com/@fluently.kate',
-  'https://www.tiktok.com/@lola_englishspeak',
-  'https://www.tiktok.com/@keisha.learns'
+  'https://www.tiktok.com/@wordy.adri',
+  'https://www.tiktok.com/@learnwithmeera'
 ];
 
 // ── Accounts ──────────────────────────────────────────────────
@@ -389,7 +393,13 @@ async function loadCard(idx) {
       <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
-    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments</div>`;
+    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments${
+      f.outlierRatio > 1 ? ` &nbsp;·&nbsp; ${f.outlierRatio}× their normal` : ''}</div>
+    ${f.topic ? `<div class="screen-tags">
+      <span class="screen-topic">${f.topic}</span>
+      ${f.contentType ? `<span class="screen-chip">${f.contentType}</span>` : ''}
+      ${f.makeListicle ? `<span class="screen-chip listicle">make it a listicle</span>` : ''}
+    </div>` : ''}`;
   if (f.thumbnail) showThumb(vf, f.thumbnail, f.url);
   else {
     try {
@@ -1579,6 +1589,116 @@ function showEmptyState() {
     </div>`;
 }
 
+// ── Screening ──────────────────────────────────────────────────
+// Sarah's own account, scraped so we can tell a fresh idea from a repeat.
+const SARAH_PROFILE = 'https://www.tiktok.com/@sarah.englishwithkatie';
+// Her back catalogue barely moves week to week, and re-scraping it adds a
+// minute to every pull. Refresh it weekly and reuse it in between.
+const SARAH_CACHE_DAYS = 7;
+
+// Start an Apify run and wait for its dataset. Shared by the candidate pull
+// and Sarah's history so the two can run at the same time.
+async function runApify(profiles, onTick, resultsPerPage) {
+  const startRes = await fetch('/api/apify?action=start', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profiles, resultsPerPage })
+  });
+  const { runId } = await startRes.json();
+  if (!runId) throw new Error('Failed to start Apify run');
+  for (let attempt = 1; attempt <= 60; attempt++) {
+    await new Promise(r => setTimeout(r, 5000));
+    if (onTick) onTick(attempt * 5);
+    const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
+    const s = await statusRes.json();
+    if (s.status === 'SUCCEEDED') return s.datasetId;
+    if (s.status === 'FAILED' || s.status === 'ABORTED') throw new Error('Apify run failed');
+  }
+  throw new Error('Timed out');
+}
+
+// Every caption Sarah has posted. Cached, because it changes slowly.
+async function loadSarahHistory(setLabel) {
+  try {
+    const cached = JSON.parse(localStorage.getItem('kf_sarah_posted') || 'null');
+    const age = Date.now() - new Date(cached?.at || 0).getTime();
+    if (cached?.captions?.length && age < SARAH_CACHE_DAYS * 86400000) return cached.captions;
+  } catch (e) {}
+
+  if (setLabel) setLabel('Reading what Sarah has posted...');
+  // Her whole catalogue, not a recent window — a lesson she did last year is
+  // still a repeat, so the six-month cut is pushed out of the way here.
+  const datasetId = await runApify([SARAH_PROFILE], null, 200);
+  const res = await fetch(`/api/apify?action=results&datasetId=${datasetId}&months=999`);
+  const data = await res.json();
+  const captions = (data.videos || []).map(v => v.title).filter(t => t && t !== 'No caption');
+  localStorage.setItem('kf_sarah_posted', JSON.stringify({ at: new Date().toISOString(), captions }));
+  return captions;
+}
+
+// Walk a list in chunks, a few chunks at a time. Sequentially, screening a
+// two-creator pull ran to several minutes of watching a label; three at once
+// brings it back to about one, and results are matched by url so arrival
+// order doesn't matter.
+const CHUNK_CONCURRENCY = 3;
+
+async function postChunks(action, items, size, body, onProgress) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+
+  const out = [];
+  let done = 0;
+  let next = 0;
+
+  async function worker() {
+    while (next < chunks.length) {
+      const chunk = chunks[next++];
+      const res = await fetch(`/api/apify?action=${action}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body(chunk))
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      out.push(...(data.results || []));
+      done += chunk.length;
+      if (onProgress) onProgress(done, items.length);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
+  );
+  return out;
+}
+
+// Run every candidate past the rules, then past Sarah's back catalogue.
+// Returns the survivors, each carrying the verdict that let it through.
+async function screenCandidates(videos, setLabel, sarahCaptions) {
+  const verdicts = await postChunks(
+    'screen', videos, 8, chunk => ({ videos: chunk }),
+    (done, total) => setLabel && setLabel(`Screening videos... ${done}/${total}`)
+  );
+  const byUrl = Object.fromEntries(verdicts.map(v => [v.url, v]));
+
+  // An unclear verdict keeps the video. The filter failing is not evidence
+  // against the video, and a wrong keep is one swipe left.
+  const kept = videos
+    .map(v => ({ ...v, screen: byUrl[v.url] || null }))
+    .filter(v => v.screen?.verdict !== 'drop');
+
+  if (!kept.length || !sarahCaptions.length) return kept;
+
+  const dupes = await postChunks(
+    'dedupe', kept, 25,
+    chunk => ({
+      posted: sarahCaptions,
+      candidates: chunk.map(v => ({ url: v.url, topic: v.screen?.topic || v.title }))
+    }),
+    (done, total) => setLabel && setLabel(`Checking against Sarah's posts... ${done}/${total}`)
+  );
+  const covered = Object.fromEntries(dupes.filter(d => d.covered).map(d => [d.url, d.match]));
+  return kept.filter(v => !(v.url in covered));
+}
+
 // ── Refresh ────────────────────────────────────────────────────
 async function triggerRefresh() {
   clearAllApproved();
@@ -1590,32 +1710,41 @@ async function triggerRefresh() {
   if (icon) icon.classList.add('spinning');
   if (btn) btn.disabled = true;
   if (lastLabel) lastLabel.textContent = 'Starting scrape...';
+  const setLabel = t => { if (lastLabel) lastLabel.textContent = t; };
   try {
-    const startRes = await fetch('/api/apify?action=start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles: accounts }) });
-    const startData = await startRes.json();
-    const runId = startData.runId;
-    if (!runId) throw new Error('Failed to start Apify run');
-    let datasetId = null, attempts = 0;
-    while (attempts < 60) {
-      await new Promise(r => setTimeout(r, 5000)); attempts++;
-      if (lastLabel) lastLabel.textContent = `Scraping... (${attempts * 5}s)`;
-      const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
-      const statusData = await statusRes.json();
-      if (statusData.status === 'SUCCEEDED') { datasetId = statusData.datasetId; break; }
-      if (statusData.status === 'FAILED' || statusData.status === 'ABORTED') throw new Error('Apify run failed');
-    }
-    if (!datasetId) throw new Error('Timed out');
-    if (lastLabel) lastLabel.textContent = 'Loading videos...';
+    // Sarah's history and the candidate pull are two independent Apify runs,
+    // so they wait on each other rather than queueing.
+    const [datasetId, sarahCaptions] = await Promise.all([
+      runApify(accounts, secs => setLabel(`Scraping... (${secs}s)`)),
+      loadSarahHistory().catch(() => [])
+    ]);
+
+    setLabel('Loading videos...');
     const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
     const resultsData = await resultsRes.json();
-    if (!resultsData.videos || resultsData.videos.length === 0) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; if (lastLabel) lastLabel.textContent = 'No videos found'; return; }
-    formats = resultsData.videos.map(v => ({
+    const pulled = resultsData.videos || [];
+    if (!pulled.length) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; setLabel('No videos found'); return; }
+
+    const survivors = await screenCandidates(pulled, setLabel, sarahCaptions);
+    if (!survivors.length) {
+      if (icon) icon.classList.remove('spinning');
+      if (btn) btn.disabled = false;
+      setLabel(`Nothing new — all ${pulled.length} were filtered out`);
+      return;
+    }
+
+    formats = survivors.map(v => ({
       title: v.title || 'No caption',
       views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
       comments: v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
       url: v.url, thumbnail: v.thumbnail, author: v.author, created: v.created,
-      videoFile: v.videoFile || ''
+      videoFile: v.videoFile || '',
+      outlierRatio: v.outlierRatio || 0,
+      topic: v.screen?.topic || '',
+      contentType: v.screen?.contentType || '',
+      makeListicle: !!v.screen?.makeListicle
     }));
+    localStorage.setItem('kf_screened_out', String(pulled.length - survivors.length));
     saveCache(formats);
     showCardUI(localStorage.getItem('kf_pulled'));
   } catch (err) {
