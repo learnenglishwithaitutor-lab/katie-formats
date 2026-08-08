@@ -288,7 +288,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v60';
+const APP_VERSION = 'v61';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -662,7 +662,8 @@ async function logDecisions(explicitRows) {
   ]).map(f => ({
     url: f.url, author: f.author, topic: f.topic || '', contentType: f.contentType || '',
     screenerVerdict: 'keep', screenerReasons: '',
-    swipe: f.swipe, whyKind: f.whyKind || '', whyReason: f.whyReason || ''
+    swipe: f.swipe, whyKind: f.whyKind || '', whyReason: f.whyReason || '',
+    views: f.views ?? '', outlierRatio: f.outlierRatio ?? ''
   }));
   if (!rows.length) return;
 

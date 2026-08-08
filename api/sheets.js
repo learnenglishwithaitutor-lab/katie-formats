@@ -140,6 +140,53 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=backfill: fill Views and OutlierRatio on rows written before
+  // those columns existed. Matches on the video URL against the stored run.
+  // Only ever writes into two empty columns — the decisions themselves are
+  // never touched, so the log stays the record of what actually happened.
+  if (action === 'backfill') {
+    try {
+      const token = await getAccessToken();
+      const runRaw = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Run!A1:A400`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const run = JSON.parse((runRaw.values || []).map(r => r[0] || '').join(''));
+      const byUrl = {};
+      for (const v of [...(run.videos || []), ...(run.dropped || [])]) {
+        byUrl[v.url] = v;
+      }
+
+      const dec = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!A2:L20000`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const rows = dec.values || [];
+
+      const values = rows.map(r => {
+        const v = byUrl[r[1]];
+        // Leave a row alone if it already has the numbers, or if this run
+        // knows nothing about that video (an older pull, or a test row).
+        if (!v || (r[10] !== undefined && r[10] !== '')) return [r[10] ?? '', r[11] ?? ''];
+        return [v.views ?? '', v.outlierRatio ?? ''];
+      });
+      if (!values.length) return res.status(200).json({ ok: true, filled: 0 });
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!K2?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values })
+        }
+      );
+      const filled = values.filter(v => v[0] !== '').length;
+      return res.status(200).json({ ok: true, rows: rows.length, filled });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=decisions: append one row per swipe to the Decisions tab ──
   //
   // Append-only, deliberately. This is the record the learning loop will be
@@ -148,7 +195,12 @@ export default async function handler(req, res) {
   // rows would quietly rewrite the past and make that check meaningless.
   //
   // Columns: When | VideoURL | Author | Topic | ContentType | ScreenerVerdict |
-  //          ScreenerReasons | Swipe | WhyKind | WhyReason
+  //          ScreenerReasons | Swipe | WhyKind | WhyReason | Views | OutlierRatio
+  //
+  // Views and the outlier ratio ride along so the sheet can be sorted and
+  // filtered on performance on its own. Without them, asking "which of the
+  // ones I approved were the real breakouts" meant going back to the Run tab
+  // and joining by hand.
   if (action === 'decisions') {
     try {
       const rows = req.body?.rows || [];
@@ -164,14 +216,16 @@ export default async function handler(req, res) {
       const values = [];
       if (!head.values || !head.values.length) {
         values.push(['When', 'VideoURL', 'Author', 'Topic', 'ContentType',
-                     'ScreenerVerdict', 'ScreenerReasons', 'Swipe', 'WhyKind', 'WhyReason']);
+                     'ScreenerVerdict', 'ScreenerReasons', 'Swipe', 'WhyKind', 'WhyReason',
+                     'Views', 'OutlierRatio']);
       }
       const when = new Date().toISOString();
       for (const r of rows) {
         values.push([
           when, r.url || '', r.author || '', r.topic || '', r.contentType || '',
           r.screenerVerdict || 'keep', r.screenerReasons || '',
-          r.swipe || '', r.whyKind || '', r.whyReason || ''
+          r.swipe || '', r.whyKind || '', r.whyReason || '',
+          r.views ?? '', r.outlierRatio ?? ''
         ]);
       }
 
