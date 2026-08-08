@@ -157,6 +157,18 @@ export default async function handler(req, res) {
         byUrl[v.url] = v;
       }
 
+      // The header row was written before these two columns existed, and it is
+      // only ever created when the tab is empty — so K1 and L1 have to be set
+      // here or the numbers arrive in nameless columns.
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!K1?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [['Views', 'OutlierRatio']] })
+        }
+      );
+
       const dec = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!A2:L20000`,
         { headers: { Authorization: `Bearer ${token}` } }
