@@ -288,7 +288,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v58';
+const APP_VERSION = 'v59';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -357,6 +357,31 @@ function runAgeLabel(iso) {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+// ── Review progress ────────────────────────────────────────────
+// Saved after every single swipe, not at the end. Reviewing 150 videos in one
+// sitting is not realistic, and the first version only wrote anything once the
+// last card was gone — so closing the tab sixty in threw away all sixty.
+//
+// Tied to the run's timestamp: a new run means new videos, and resuming into
+// position 61 of a different list would be worse than starting over.
+function saveProgress() {
+  try {
+    localStorage.setItem('kf_progress', JSON.stringify({
+      runAt: latestRun?.at || '', current, approved, rejected
+    }));
+  } catch (e) {}
+}
+
+function loadProgress() {
+  try {
+    const p = JSON.parse(localStorage.getItem('kf_progress') || 'null');
+    if (p && p.runAt === (latestRun?.at || '')) return p;
+  } catch (e) {}
+  return null;
+}
+
+function clearProgress() { localStorage.removeItem('kf_progress'); }
+
 // ── Cache ──────────────────────────────────────────────────────
 function saveCache(videos) {
   localStorage.setItem('kf_videos', JSON.stringify(videos));
@@ -408,8 +433,8 @@ function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review'
 }
 
 // ── Stage 1: Format card UI ────────────────────────────────────
-function showCardUI(pulledAt) {
-  current = 0; approved.length = 0; rejected.length = 0;
+function showCardUI(pulledAt, resume) {
+  if (!resume) { current = 0; approved.length = 0; rejected.length = 0; }
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulledAt, formats.length + ' videos to review' + (latestRun?.counts?.dropped ? ` · ${latestRun.counts.dropped} filtered out` : ''), true, 'Format review')}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
@@ -429,10 +454,36 @@ function showCardUI(pulledAt) {
     <div style="display:flex;gap:12px;padding:12px 10px 0;flex-shrink:0;">
       <button onclick="swipe('left')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:0.5px solid var(--border);background:var(--surface);color:var(--reject);cursor:pointer;font-family:inherit;">✕ Skip</button>
       <button onclick="swipe('right')" style="flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:600;border:none;background:var(--approve);color:#fff;cursor:pointer;font-family:inherit;">✓ Approve</button>
+    </div>
+    <div style="text-align:center;padding:10px 0 0;flex-shrink:0;">
+      <button id="undo-btn" onclick="undoLast()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;">↩ Undo last</button>
     </div>`;
   attachTouchEvents();
   document.onkeydown = (e) => { if (e.key === 'ArrowRight') swipe('right'); else if (e.key === 'ArrowLeft') swipe('left'); };
-  loadCard(0);
+  loadCard(current);
+  updateUndo();
+}
+
+// ── Undo ───────────────────────────────────────────────────────
+// A thumb slips, and without this the only way back was to start the whole
+// batch again. Steps back one card and takes it out of whichever list it
+// landed in.
+function undoLast() {
+  if (current === 0) return;
+  current--;
+  const v = formats[current];
+  for (const list of [approved, rejected]) {
+    const i = list.findIndex(x => x.url === v.url);
+    if (i > -1) list.splice(i, 1);
+  }
+  saveProgress();
+  loadCard(current);
+  updateUndo();
+}
+
+function updateUndo() {
+  const b = document.getElementById('undo-btn');
+  if (b) { b.disabled = current === 0; b.style.opacity = current === 0 ? 0.3 : 1; }
 }
 
 // The run doc carries raw counts — the formatting used to happen during the
@@ -602,12 +653,15 @@ function doSwipe(dir, why) {
   if (dir === 'right') approved.push(formats[current]);
   else rejected.push({ ...formats[current], whyKind: why?.kind || '', whyReason: why?.reason || '' });
   current++;
+  // Before the animation, not after — a tab closed mid-flight still counts.
+  saveProgress();
+  saveApprovedFormats(approved);
   setTimeout(() => {
     card.classList.remove('animating','fly-right','fly-left');
     card.style.transform = '';
     ['stamp-a','stamp-r','bg-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 0; });
-    if (current >= formats.length) { saveApprovedFormats(approved); showStage1Done(); }
-    else loadCard(current);
+    if (current >= formats.length) showStage1Done();
+    else { loadCard(current); updateUndo(); }
   }, 400);
 }
 
@@ -618,11 +672,14 @@ function doSwipe(dir, why) {
 // Reviewing the same batch again appends a second row rather than replacing
 // the first. Changing your mind is itself worth knowing about, so whoever
 // reads this later takes the newest row per video and keeps the rest.
-async function logDecisions() {
-  const rows = [
+// With no argument, logs the whole session. With one, logs just those rows —
+// used when a single skip is put back, so a correction does not re-append all
+// hundred and fifty.
+async function logDecisions(explicitRows) {
+  const rows = (explicitRows || [
     ...approved.map(f => ({ ...f, swipe: 'approve' })),
     ...rejected.map(f => ({ ...f, swipe: 'reject' }))
-  ].map(f => ({
+  ]).map(f => ({
     url: f.url, author: f.author, topic: f.topic || '', contentType: f.contentType || '',
     screenerVerdict: 'keep', screenerReasons: '',
     swipe: f.swipe, whyKind: f.whyKind || '', whyReason: f.whyReason || ''
@@ -644,8 +701,8 @@ async function logDecisions() {
 }
 
 // ── Stage 1: Done ──────────────────────────────────────────────
-function showStage1Done() {
-  logDecisions();
+function showStage1Done(skipLog) {
+  if (!skipLog) logDecisions();
   const pulled = localStorage.getItem('kf_pulled');
   document.getElementById('app').innerHTML = `
     ${headerHTML(pulled, null, true, 'Format review')}
@@ -653,12 +710,13 @@ function showStage1Done() {
       <div class="check">✓</div>
       <h2>Formats reviewed</h2>
       <p>${approved.length} approved · ${rejected.length} skipped</p>
-      ${rejected.filter(r => r.whyKind).length ? `
+      ${rejected.length ? `
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Skipped — tap one to put it back</div>
         <div class="approved-list" style="margin-bottom:14px;">
-          ${rejected.filter(r => r.whyKind).map(r => `
-            <div class="approved-item">
+          ${rejected.map((r, i) => `
+            <div class="approved-item" style="cursor:pointer;" onclick="restoreSkipped(${i})">
               <span class="t">${r.whyReason || r.topic || r.title}</span>
-              <span class="v">${(WHY_KINDS.find(k => k.id === r.whyKind) || {}).label?.split(' ')[0] || ''}</span>
+              <span class="v">↩ put back</span>
             </div>`).join('')}
         </div>` : ''}
       ${approved.length > 0 ? `
@@ -671,12 +729,27 @@ function showStage1Done() {
       <button class="btn-secondary" onclick="showHome()">← Home</button>
     </div>`;
 }
+// Move one back out of the skipped list. The sheet already has it logged as a
+// reject, so the correction is logged too — the Decisions tab is append-only
+// and whoever reads it takes the newest row per video.
+function restoreSkipped(i) {
+  const v = rejected.splice(i, 1)[0];
+  if (!v) return;
+  delete v.whyKind; delete v.whyReason;
+  approved.push(v);
+  saveApprovedFormats(approved);
+  saveProgress();
+  logDecisions([{ ...v, swipe: 'approve' }]);
+  showStage1Done(true);
+}
+
 function reviewFormatsAgain() {
   approved.length = 0; rejected.length = 0;
   saveApprovedFormats([]);
+  clearProgress();
   ['kf_generated_scripts','kf_generated_scripts_date','kf_approved_scripts','kf_approved_scripts_date','kf_generated_videos','kf_generated_videos_date'].forEach(k=>localStorage.removeItem(k));
   current = 0;
-  showCardUI(localStorage.getItem('kf_pulled'));
+  showCardUI(latestRun?.at);
 }
 
 // ── Stage 2: Generate scripts ──────────────────────────────────
@@ -2483,9 +2556,13 @@ function swipeStageCardHTML(hasVideos, hasFormats, af, cache, pulled) {
   const run = latestRun;
   const n = run?.videos?.length || 0;
   const c = run?.counts || {};
-  const meta = run
-    ? `${c.dropped || 0} filtered out · ${runAgeLabel(run.at)}`
-    : 'Nothing yet — run it from your Mac';
+  const p = loadProgress();
+  const partway = p && p.current > 0 && p.current < n;
+  const meta = !run
+    ? 'Nothing yet — run it from your Mac'
+    : partway
+      ? `${p.current} of ${n} reviewed — pick up where you left off`
+      : `${c.dropped || 0} filtered out · ${runAgeLabel(run.at)}`;
   return `
       <div class="stage-card ${n ? '' : 'disabled'}" onclick="${n ? 'startStage1()' : ''}">
         <div class="stage-icon">🎬</div>
@@ -2495,7 +2572,7 @@ function swipeStageCardHTML(hasVideos, hasFormats, af, cache, pulled) {
           </div>
           <div class="stage-meta">${meta}</div>
         </div>
-        ${n ? `<div class="stage-num">${n}<small>to review</small></div>` : '<div class="stage-arrow">›</div>'}
+        ${n ? `<div class="stage-num">${partway ? n - p.current : n}<small>${partway ? 'left' : 'to review'}</small></div>` : '<div class="stage-arrow">›</div>'}
       </div>`;
 }
 
@@ -2612,15 +2689,27 @@ function resetAppData() {
 function startStage1() {
   if (!latestRun?.videos?.length) return;
   formats = latestRun.videos;
+
+  // Part-way through this same run — pick up on the next unseen card.
+  const p = loadProgress();
+  if (p && p.current > 0 && p.current < formats.length) {
+    current = p.current;
+    approved.length = 0; (p.approved || []).forEach(f => approved.push(f));
+    rejected.length = 0; (p.rejected || []).forEach(f => rejected.push(f));
+    showCardUI(latestRun.at, true);
+    return;
+  }
+
   const savedApproved = loadApprovedFormats();
-  if (savedApproved && savedApproved.length > 0) {
-    // Already have approvals — show summary
+  const finished = (p && p.current >= formats.length)
+                || (!p && savedApproved && savedApproved.length > 0);
+  if (finished) {
+    // Finished — show the summary rather than starting again.
     approved.length = 0;
-    savedApproved.forEach(f => approved.push(f));
-    rejected.length = 0;
+    ((p && p.approved) || savedApproved || []).forEach(f => approved.push(f));
+    rejected.length = 0; ((p && p.rejected) || []).forEach(f => rejected.push(f));
     showStage1Done();
   } else {
-    // No approvals yet — go straight to swipe
     approved.length = 0; rejected.length = 0;
     showCardUI(latestRun.at);
   }
