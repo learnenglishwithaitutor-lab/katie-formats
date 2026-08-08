@@ -82,6 +82,64 @@ export default async function handler(req, res) {
 
   const action = req.method === 'GET' ? req.query.action : (req.body?.action);
 
+  // ── action=putrun / getrun: the latest run, as one JSON document ──
+  //
+  // The Mac does the work now and the app only displays it, so the run has to
+  // live somewhere both can reach. Sheets caps a cell at 50k chars, so the
+  // document is split down column A of a Run tab and joined back on read —
+  // the same trick api/index-data.js uses for the project index.
+  //
+  // The document carries the transcripts it screened from, not just the
+  // verdicts. Fetching them again is not an option: TikTok's subtitle links
+  // are signed and expire after about two days, so a run that did not keep
+  // its own evidence can never be re-examined.
+  if (action === 'putrun' || action === 'getrun') {
+    const RUN_TAB = 'Run';
+    const CHUNK = 40000;
+    const MAX_ROWS = 400;
+    try {
+      const token = await getAccessToken();
+      await ensureTab(token, RUN_TAB);
+
+      if (action === 'getrun') {
+        const r = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RUN_TAB}!A1:A${MAX_ROWS}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).then(x => x.json());
+        const raw = (r.values || []).map(row => row[0] || '').join('');
+        if (!raw.trim()) return res.status(200).json({ ok: true, data: null });
+        try { return res.status(200).json({ ok: true, data: JSON.parse(raw) }); }
+        catch (e) { return res.status(500).json({ error: 'stored run is not valid JSON' }); }
+      }
+
+      const doc = req.body?.data;
+      if (!doc) return res.status(400).json({ error: 'no data' });
+      const raw = JSON.stringify(doc);
+      if (raw.length > CHUNK * MAX_ROWS) return res.status(413).json({ error: 'run too large' });
+      const rows = [];
+      for (let i = 0; i < raw.length; i += CHUNK) rows.push([raw.slice(i, i + CHUNK)]);
+
+      // Clear first, or a shorter run leaves the tail of a longer one behind
+      // and the joined JSON is garbage.
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RUN_TAB}!A1:A${MAX_ROWS}:clear`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      );
+      const w = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RUN_TAB}!A1?valueInputOption=RAW`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: rows })
+        }
+      ).then(x => x.json());
+      if (w.error) return res.status(500).json({ error: 'write failed', detail: w.error });
+      return res.status(200).json({ ok: true, chunks: rows.length, bytes: raw.length });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── action=decisions: append one row per swipe to the Decisions tab ──
   //
   // Append-only, deliberately. This is the record the learning loop will be
