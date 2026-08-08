@@ -350,7 +350,7 @@ function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review'
 function showCardUI(pulledAt) {
   current = 0; approved.length = 0; rejected.length = 0;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulledAt, formats.length + ' videos to review', true, 'Format review')}
+    ${headerHTML(pulledAt, formats.length + ' videos to review' + (Number(localStorage.getItem('kf_screened_out')) > 0 ? ' · ' + localStorage.getItem('kf_screened_out') + ' filtered out' : ''), true, 'Format review')}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -1605,7 +1605,7 @@ async function runApify(profiles, onTick, resultsPerPage) {
   });
   const { runId } = await startRes.json();
   if (!runId) throw new Error('Failed to start Apify run');
-  for (let attempt = 1; attempt <= 60; attempt++) {
+  for (let attempt = 1; attempt <= 90; attempt++) {
     await new Promise(r => setTimeout(r, 5000));
     if (onTick) onTick(attempt * 5);
     const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
