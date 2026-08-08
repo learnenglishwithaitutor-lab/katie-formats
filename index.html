@@ -85,6 +85,10 @@
     .screen-topic { font-size: 11px; font-weight: 600; color: var(--text); }
     .screen-chip { font-size: 10px; color: var(--muted); border: 0.5px solid var(--muted); border-radius: 999px; padding: 2px 8px; }
     .screen-chip.listicle { color: #5DCAA5; border-color: #5DCAA5; }
+    /* Real lines from the video — the thing that tells you if the idea is any good */
+    .card-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .card-examples span { font-size: 12px; color: var(--text); background: rgba(93,202,165,0.12);
+      border-radius: 8px; padding: 4px 10px; }
 
     /* Why-skip sheet */
     .why-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
@@ -284,7 +288,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────
-const APP_VERSION = 'v57';
+const APP_VERSION = 'v58';
 let formats = [];
 let current = 0;
 const approved = [], rejected = [];
@@ -316,6 +320,42 @@ function normaliseUrl(input) {
   return 'https://www.tiktok.com/@' + input.replace(/^@/, '');
 }
 function handleFromUrl(url) { const m = url.match(/@([^/?]+)/); return m ? '@' + m[1] : url; }
+
+// ── The latest run ─────────────────────────────────────────────
+// The Mac does the pulling and screening now (scripts/screen_run.py) and
+// publishes one JSON document to the sheet. The app reads it. Nothing here
+// starts work — there is no refresh button any more, on purpose.
+let latestRun = null;
+
+function saveRunCache(doc) {
+  try { localStorage.setItem('kf_run', JSON.stringify(doc)); } catch (e) {}
+}
+function loadRunCache() {
+  try { return JSON.parse(localStorage.getItem('kf_run') || 'null'); } catch (e) { return null; }
+}
+
+// Shows the cached run straight away and refreshes behind it, so opening the
+// app on a bad connection still shows last night's videos rather than a
+// spinner.
+async function fetchRun() {
+  try {
+    const res = await fetch('/api/sheets?action=getrun');
+    const d = await res.json();
+    if (d.ok && d.data) { latestRun = d.data; saveRunCache(d.data); }
+  } catch (e) {}
+  return latestRun;
+}
+
+function runAgeLabel(iso) {
+  if (!iso) return '';
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 // ── Cache ──────────────────────────────────────────────────────
 function saveCache(videos) {
@@ -360,9 +400,6 @@ function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review'
       </div>
       <div class="header-right">
         <div style="display:flex;align-items:center;gap:10px;">
-          ${SWIPE_STAGE_ENABLED ? `<button class="refresh-btn" onclick="triggerRefresh()" id="refresh-btn">
-            <span class="refresh-icon" id="refresh-icon">↻</span> Refresh
-          </button>` : ''}
           <button class="icon-btn" onclick="showSettings()">⚙️</button>
         </div>
         <span class="last-pulled" id="last-pulled">${lastPulledLabel(pulledAt)}</span>
@@ -374,7 +411,7 @@ function headerHTML(pulledAt, countText, showHomeBtn=true, title='Format review'
 function showCardUI(pulledAt) {
   current = 0; approved.length = 0; rejected.length = 0;
   document.getElementById('app').innerHTML = `
-    ${headerHTML(pulledAt, formats.length + ' videos to review' + (Number(localStorage.getItem('kf_screened_out')) > 0 ? ' · ' + localStorage.getItem('kf_screened_out') + ' filtered out' : ''), true, 'Format review')}
+    ${headerHTML(pulledAt, formats.length + ' videos to review' + (latestRun?.counts?.dropped ? ` · ${latestRun.counts.dropped} filtered out` : ''), true, 'Format review')}
     <div class="progress-bar"><div class="progress-fill" id="progress" style="width:${100/formats.length}%"></div></div>
     <div class="card-area">
       <div class="card-stack">
@@ -398,6 +435,15 @@ function showCardUI(pulledAt) {
   loadCard(0);
 }
 
+// The run doc carries raw counts — the formatting used to happen during the
+// pull, which no longer exists here.
+function fmtNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
+
 async function loadCard(idx) {
   const vf = document.getElementById('video-frame');
   const meta = document.getElementById('meta');
@@ -408,6 +454,7 @@ async function loadCard(idx) {
   if (tc) tc.textContent = `${idx+1} / ${formats.length} videos`;
   vf.innerHTML = '<div class="video-loading"><div class="spinner"></div><span>Loading...</span></div>';
   const posted = formatPosted(f.created);
+  const views = fmtNum(f.views), comments = fmtNum(f.comments);
   meta.innerHTML = `
     <div class="meta-top">
       <div class="meta-top-left">
@@ -417,8 +464,10 @@ async function loadCard(idx) {
       <a class="comments-link" href="${f.url}" target="_blank">💬 Comments</a>
     </div>
     <div class="card-title">${f.title}</div>
-    <div class="views">♥ ${f.views} likes &nbsp;·&nbsp; 💬 ${f.comments || '–'} comments${
+    <div class="views">♥ ${views} likes &nbsp;·&nbsp; 💬 ${comments} comments${
       f.outlierRatio > 1 ? ` &nbsp;·&nbsp; ${f.outlierRatio}× their normal` : ''}</div>
+    ${(f.examples || []).length ? `<div class="card-examples">${
+      f.examples.slice(0, 3).map(e => `<span>${e}</span>`).join('')}</div>` : ''}
     ${f.topic ? `<div class="screen-tags">
       <span class="screen-topic">${f.topic}</span>
       ${f.contentType ? `<span class="screen-chip">${f.contentType}</span>` : ''}
@@ -1740,179 +1789,14 @@ function showEmptyState() {
       <div style="font-size:48px;">🎬</div>
       <div>
         <h1 style="font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-0.4px;">Format Review</h1>
-        <p style="font-size:14px;color:#888;margin:0;">No videos yet. Pull the latest from your tracked accounts.</p>
-      </div>
-      <button onclick="triggerRefresh()" id="refresh-btn" style="width:100%;max-width:320px;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;border:none;background:#1D9E75;color:#fff;font-family:inherit;">
-        Get fresh videos
-      </button>
+        <p style="font-size:14px;color:#888;margin:0;">Nothing screened yet.</p>
+        <p style="font-size:13px;color:#888;margin:10px 0 0;">Run it on your Mac:<br><code style="font-size:12px;">python3 scripts/screen_run.py</code></p>
     </div>`;
 }
 
-// ── Screening ──────────────────────────────────────────────────
-// Sarah's own account, scraped so we can tell a fresh idea from a repeat.
-const SARAH_PROFILE = 'https://www.tiktok.com/@sarah.englishwithkatie';
-// Her back catalogue barely moves week to week, and re-scraping it adds a
-// minute to every pull. Refresh it weekly and reuse it in between.
-const SARAH_CACHE_DAYS = 7;
-
-// Start an Apify run and wait for its dataset. Shared by the candidate pull
-// and Sarah's history so the two can run at the same time.
-async function runApify(profiles, onTick, resultsPerPage) {
-  const startRes = await fetch('/api/apify?action=start', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profiles, resultsPerPage })
-  });
-  const { runId } = await startRes.json();
-  if (!runId) throw new Error('Failed to start Apify run');
-  for (let attempt = 1; attempt <= 90; attempt++) {
-    await new Promise(r => setTimeout(r, 5000));
-    if (onTick) onTick(attempt * 5);
-    const statusRes = await fetch(`/api/apify?action=status&runId=${runId}`);
-    const s = await statusRes.json();
-    if (s.status === 'SUCCEEDED') return s.datasetId;
-    if (s.status === 'FAILED' || s.status === 'ABORTED') throw new Error('Apify run failed');
-  }
-  throw new Error('Timed out');
-}
-
-// Every caption Sarah has posted. Cached, because it changes slowly.
-async function loadSarahHistory(setLabel) {
-  try {
-    const cached = JSON.parse(localStorage.getItem('kf_sarah_posted') || 'null');
-    const age = Date.now() - new Date(cached?.at || 0).getTime();
-    if (cached?.captions?.length && age < SARAH_CACHE_DAYS * 86400000) return cached.captions;
-  } catch (e) {}
-
-  if (setLabel) setLabel('Reading what Sarah has posted...');
-  // Her whole catalogue, not a recent window — a lesson she did last year is
-  // still a repeat, so the six-month cut is pushed out of the way here.
-  const datasetId = await runApify([SARAH_PROFILE], null, 200);
-  const res = await fetch(`/api/apify?action=results&datasetId=${datasetId}&months=999`);
-  const data = await res.json();
-  const captions = (data.videos || []).map(v => v.title).filter(t => t && t !== 'No caption');
-  localStorage.setItem('kf_sarah_posted', JSON.stringify({ at: new Date().toISOString(), captions }));
-  return captions;
-}
-
-// Walk a list in chunks, a few chunks at a time. Sequentially, screening a
-// two-creator pull ran to several minutes of watching a label; three at once
-// brings it back to about one, and results are matched by url so arrival
-// order doesn't matter.
-const CHUNK_CONCURRENCY = 3;
-
-async function postChunks(action, items, size, body, onProgress) {
-  const chunks = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-
-  const out = [];
-  let done = 0;
-  let next = 0;
-
-  async function worker() {
-    while (next < chunks.length) {
-      const chunk = chunks[next++];
-      const res = await fetch(`/api/apify?action=${action}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body(chunk))
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      out.push(...(data.results || []));
-      done += chunk.length;
-      if (onProgress) onProgress(done, items.length);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
-  );
-  return out;
-}
-
-// Run every candidate past the rules, then past Sarah's back catalogue.
-// Returns the survivors, each carrying the verdict that let it through.
-async function screenCandidates(videos, setLabel, sarahCaptions) {
-  const verdicts = await postChunks(
-    'screen', videos, 8, chunk => ({ videos: chunk }),
-    (done, total) => setLabel && setLabel(`Screening videos... ${done}/${total}`)
-  );
-  const byUrl = Object.fromEntries(verdicts.map(v => [v.url, v]));
-
-  // An unclear verdict keeps the video. The filter failing is not evidence
-  // against the video, and a wrong keep is one swipe left.
-  const kept = videos
-    .map(v => ({ ...v, screen: byUrl[v.url] || null }))
-    .filter(v => v.screen?.verdict !== 'drop');
-
-  if (!kept.length || !sarahCaptions.length) return kept;
-
-  const dupes = await postChunks(
-    'dedupe', kept, 25,
-    chunk => ({
-      posted: sarahCaptions,
-      candidates: chunk.map(v => ({ url: v.url, topic: v.screen?.topic || v.title }))
-    }),
-    (done, total) => setLabel && setLabel(`Checking against Sarah's posts... ${done}/${total}`)
-  );
-  const covered = Object.fromEntries(dupes.filter(d => d.covered).map(d => [d.url, d.match]));
-  return kept.filter(v => !(v.url in covered));
-}
-
-// ── Refresh ────────────────────────────────────────────────────
-async function triggerRefresh() {
-  clearAllApproved();
-  const icon = document.getElementById('refresh-icon');
-  const btn = document.getElementById('refresh-btn');
-  const lastLabel = document.getElementById('last-pulled');
-  const accounts = loadAccounts();
-  if (accounts.length === 0) { alert('No accounts to scrape. Add some in ⚙️ Settings first.'); return; }
-  if (icon) icon.classList.add('spinning');
-  if (btn) btn.disabled = true;
-  if (lastLabel) lastLabel.textContent = 'Starting scrape...';
-  const setLabel = t => { if (lastLabel) lastLabel.textContent = t; };
-  try {
-    // Sarah's history and the candidate pull are two independent Apify runs,
-    // so they wait on each other rather than queueing.
-    const [datasetId, sarahCaptions] = await Promise.all([
-      runApify(accounts, secs => setLabel(`Scraping... (${secs}s)`)),
-      loadSarahHistory().catch(() => [])
-    ]);
-
-    setLabel('Loading videos...');
-    const resultsRes = await fetch(`/api/apify?action=results&datasetId=${datasetId}`);
-    const resultsData = await resultsRes.json();
-    const pulled = resultsData.videos || [];
-    if (!pulled.length) { if (icon) icon.classList.remove('spinning'); if (btn) btn.disabled = false; setLabel('No videos found'); return; }
-
-    const survivors = await screenCandidates(pulled, setLabel, sarahCaptions);
-    if (!survivors.length) {
-      if (icon) icon.classList.remove('spinning');
-      if (btn) btn.disabled = false;
-      setLabel(`Nothing new — all ${pulled.length} were filtered out`);
-      return;
-    }
-
-    formats = survivors.map(v => ({
-      title: v.title || 'No caption',
-      views: v.views > 1000000 ? (v.views/1000000).toFixed(1)+'M' : v.views > 1000 ? Math.round(v.views/1000)+'K' : String(v.views || 0),
-      comments: v.comments > 1000 ? Math.round(v.comments/1000)+'K' : String(v.comments || 0),
-      url: v.url, thumbnail: v.thumbnail, author: v.author, created: v.created,
-      videoFile: v.videoFile || '',
-      outlierRatio: v.outlierRatio || 0,
-      topic: v.screen?.topic || '',
-      contentType: v.screen?.contentType || '',
-      makeListicle: !!v.screen?.makeListicle
-    }));
-    localStorage.setItem('kf_screened_out', String(pulled.length - survivors.length));
-    saveCache(formats);
-    showCardUI(localStorage.getItem('kf_pulled'));
-  } catch (err) {
-    if (icon) icon.classList.remove('spinning');
-    if (btn) btn.disabled = false;
-    if (lastLabel) lastLabel.textContent = err.message.length < 40 ? err.message : 'Refresh failed — try again';
-    console.error(err);
-  }
-}
+// Screening used to happen here, in the browser, one Claude call per video
+// against the paid API. It runs on the Mac now — scripts/screen_run.py — and
+// the app only reads the run it publishes. See fetchRun() above.
 
 // ── Stage 1 touch events ───────────────────────────────────────
 function attachTouchEvents() {
@@ -2596,16 +2480,22 @@ const OMNI_STAGE_ENABLED   = false;
 const ANY_LEGACY_STAGE = SWIPE_STAGE_ENABLED || SCRIPT_STAGE_ENABLED || OMNI_STAGE_ENABLED;
 
 function swipeStageCardHTML(hasVideos, hasFormats, af, cache, pulled) {
+  const run = latestRun;
+  const n = run?.videos?.length || 0;
+  const c = run?.counts || {};
+  const meta = run
+    ? `${c.dropped || 0} filtered out · ${runAgeLabel(run.at)}`
+    : 'Nothing yet — run it from your Mac';
   return `
-      <div class="stage-card ${!hasVideos ? 'disabled' : ''}" onclick="${hasVideos ? 'startStage1()' : ''}">
+      <div class="stage-card ${n ? '' : 'disabled'}" onclick="${n ? 'startStage1()' : ''}">
         <div class="stage-icon">🎬</div>
         <div class="stage-info">
-          <div class="stage-title">Review formats
-            ${hasFormats ? `<span class="stage-badge ready">${af.length} approved</span>` : `<span class="stage-badge empty">Not started</span>`}
+          <div class="stage-title">Review videos
+            ${hasFormats ? `<span class="stage-badge ready">${af.length} approved</span>` : ''}
           </div>
-          <div class="stage-meta">${hasVideos ? `${cache.videos.length} videos from ${shortDate(pulled)}` : 'No videos yet — tap Refresh'}</div>
+          <div class="stage-meta">${meta}</div>
         </div>
-        <div class="stage-arrow">›</div>
+        ${n ? `<div class="stage-num">${n}<small>to review</small></div>` : '<div class="stage-arrow">›</div>'}
       </div>`;
 }
 
@@ -2720,9 +2610,8 @@ function resetAppData() {
 }
 
 function startStage1() {
-  const cache = loadCache();
-  if (!cache) return;
-  formats = cache.videos;
+  if (!latestRun?.videos?.length) return;
+  formats = latestRun.videos;
   const savedApproved = loadApprovedFormats();
   if (savedApproved && savedApproved.length > 0) {
     // Already have approvals — show summary
@@ -2733,7 +2622,7 @@ function startStage1() {
   } else {
     // No approvals yet — go straight to swipe
     approved.length = 0; rejected.length = 0;
-    showCardUI(cache.pulled);
+    showCardUI(latestRun.at);
   }
 }
 
@@ -2801,7 +2690,11 @@ function startStage3() {
       return;
     }
   }
+  // Paint from the cached run first so the app is usable straight away, then
+  // pick up anything the Mac has published since and repaint.
+  latestRun = loadRunCache();
   showHome();
+  fetchRun().then(() => showHome());
 })();
 </script>
 </body>
