@@ -41,13 +41,25 @@ export default async function handler(req, res) {
       ));
     }
 
-    return res.status(200).send(`<!DOCTYPE html><html><body>
+    // The token is SHOWN as well as stored. The PWA only ever needed it in
+    // localStorage, but the overnight video pipeline runs on a Mac with no
+    // browser, so the same token has to be copyable out by hand exactly once.
+    // The redirect is now a link rather than automatic — an auto-redirect would
+    // flash the token past before it could be copied. localStorage is still set
+    // the moment this page loads, so the app behaves as before once you click.
+    return res.status(200).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;max-width:760px;">
       <script>
         localStorage.setItem('kf_google_refresh_token', ${JSON.stringify(tokenData.refresh_token)});
         localStorage.setItem('kf_google_connected_at', new Date().toISOString());
-        window.location.href = '/?gdrive_connected=1';
       </script>
-      Connected! Redirecting…
+      <h3>Connected.</h3>
+      <p>Copy this refresh token — it is shown once and is what lets the video
+         pipeline upload to Drive without a browser:</p>
+      <textarea readonly rows="3" style="width:100%;font-family:monospace;font-size:13px;padding:8px;"
+        onclick="this.select()">${tokenData.refresh_token}</textarea>
+      <p style="color:#666;font-size:13px;">Treat it like a password — it grants
+         access to files this app creates in your Drive.</p>
+      <p><a href="/?gdrive_connected=1">← Continue to the app</a></p>
     </body></html>`);
   } catch (e) {
     return res.status(500).send(htmlMessage('Token exchange failed.', e.message));

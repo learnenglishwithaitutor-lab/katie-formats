@@ -3,7 +3,17 @@
 
 const CLIENT_ID    = process.env.GOOGLE_CLIENT_ID;
 const REDIRECT_URI = 'https://katie-formats-app.vercel.app/api/auth/callback';
-const SCOPE        = 'https://www.googleapis.com/auth/drive.file';
+// drive.file  — upload finished videos. Only ever sees files this app created,
+//               never the rest of the Drive.
+// spreadsheets — read the approved-formats sheet and write the "generated"
+//               column back. Added 2026-08-09 so ONE sign-in covers the whole
+//               video pipeline; the alternative was a second credential (a
+//               service-account key) for the sheet alone.
+// The PWA only needs drive.file and is unaffected by the extra scope.
+const SCOPE = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/spreadsheets',
+].join(' ');
 
 export default async function handler(req, res) {
   if (!CLIENT_ID) {
