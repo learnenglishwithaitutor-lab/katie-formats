@@ -39,6 +39,11 @@ APP = "https://katie-formats-app.vercel.app"
 CREATORS = [
     "https://www.tiktok.com/@wordy.adri",
     "https://www.tiktok.com/@learnwithmeera",
+    # Added 2026-08-09. Ashitha vetted these two on Facebook first; these are
+    # the same creators' TikTok accounts, so no second scraper is needed. The
+    # third Facebook creator (facebook.com/share/181nhF2pz1) was dropped.
+    "https://www.tiktok.com/@learnativenglish",
+    "https://www.tiktok.com/@englishwithevelyn",
 ]
 
 SARAH = "https://www.tiktok.com/@sarah.englishwithkatie"
@@ -383,6 +388,39 @@ def dedupe(candidates, posted):
     return covered
 
 
+# ── Already swiped ────────────────────────────────────────────────────
+
+def already_swiped():
+    """Every video URL Ashitha has ever swiped, from the Decisions tab.
+
+    Applied before transcripts and screening, not after, so a video she has
+    already judged costs nothing to skip. Until this existed, each run rebuilt
+    the whole deck from card one: the app only remembers a position within a
+    single run, so adding one creator meant re-swiping every video from the
+    old ones. The decisions were always recorded; nothing read them back.
+
+    Stops the run if the sheet cannot be read. The tempting alternative is to
+    carry on with an empty set, but that publishes a deck of several hundred
+    already-swiped videos and looks like a normal run — Ashitha would only
+    find out by swiping through them. A run that refuses to start says what
+    is wrong in one line and costs nothing but a retry.
+
+    Checked before the scrape for that reason: no Apify call, no screening,
+    nothing published.
+    """
+    try:
+        seen = set(api("/api/sheets?action=readdecisions").get("urls", []))
+    except Exception as e:
+        sys.exit(
+            f"  STOPPED: could not read past decisions from the sheet ({e}).\n"
+            f"  Nothing was scraped or published. Without that list the run "
+            f"would re-show videos you have already swiped, so it will not "
+            f"start. Check the sheet is reachable and run it again."
+        )
+    log(f"{len(seen)} videos already swiped in earlier runs")
+    return seen
+
+
 # ── Sarah's history ───────────────────────────────────────────────────
 
 def sarah_history():
@@ -425,10 +463,15 @@ def main():
         # without the rest.
         videos = add_transcripts(videos)
     else:
+        # First, before anything is spent: if this cannot be read the run stops.
+        seen = already_swiped()
         posted = sarah_history()
         ds = scrape(CREATORS, PER_CREATOR, "creators")
         videos = results(ds)
         log(f"{len(videos)} videos in the last six months")
+        fresh = [v for v in videos if v["url"] not in seen]
+        log(f"{len(videos) - len(fresh)} dropped as already swiped, {len(fresh)} new")
+        videos = fresh
         videos = add_transcripts(videos)
         # Save the raw pull before screening: the transcripts inside it are the
         # part that cannot be fetched again.

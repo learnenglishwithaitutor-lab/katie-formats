@@ -27,10 +27,40 @@ survive between sessions.
       is the quickest signal that screening has drifted — a sudden jump means a
       rule is too harsh, a drop to nothing means it stopped filtering.
 
-## Bugs
+## More creators
 
-- [ ] **Facebook creators are not all being pulled.** 3 of the 5 tracked
-      accounts return nothing. Cause not yet diagnosed.
+The full list, with notes and platform, is in `CREATORS.md`.
+
+- [ ] **Add the four new TikTok candidates.** @englishwithemma_,
+      @reallygoodenglishclasses, @rebeccas_english_hub, @mari.engliish. All four
+      resolve, and TikTok needs no new code — it is a line each in `CREATORS`
+      and a longer screening pass.
+
+- [ ] **Instagram needs a second Apify actor.** One candidate waiting
+      (@your.english.cheerleader). Reels report play counts, so the outlier
+      ranking works unchanged; the work is a second actor and mapping its
+      results into the same video record.
+
+- [ ] **YouTube Shorts needs a second actor and its own transcripts.** One
+      channel waiting (@POCEnglish) and one loose video. Harder than Instagram:
+      the TikTok scrape hands over speech-to-text for free and YouTube does not,
+      so the screener would be judging titles unless a transcript route is added.
+
+- [ ] **Identify the loose YouTube short** `bh6wMVTkS3M` — a single video, not
+      an account. Find whose channel it is before it can be tracked.
+
+## Done
+
+- [x] **Only show videos not yet swiped.** Done 2026-08-09. The Decisions tab
+      always recorded every swipe, but nothing read it back, so each run rebuilt
+      the deck from card one and adding one creator meant re-swiping every video
+      from the old ones. The pull now reads the tab first and drops anything
+      already judged — and stops with a plain message if the sheet cannot be
+      read, rather than publishing a deck of repeats that looks normal.
+
+- [x] **Facebook creators are not all being pulled.** Closed 2026-08-09, not
+      fixed. Two of the three turned out to have TikTok accounts and were added
+      there; the third was dropped. See `CREATORS.md`.
 
 ---
 

@@ -363,6 +363,29 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── action=readdecisions: every video URL already swiped, ever ──
+  //
+  // The pull uses this to drop videos Ashitha has already judged. Without it
+  // every run re-showed the whole deck from card one, because the app only
+  // remembers a position inside a single run — so a new run meant swiping the
+  // same videos again. The record was always here; nothing read it back.
+  //
+  // Returns bare URLs rather than full rows: the caller only needs to know
+  // "seen or not", and the tab is append-only so it grows forever.
+  if (action === 'readdecisions') {
+    try {
+      const token = await getAccessToken();
+      const data = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!B2:B20000`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json());
+      const urls = [...new Set((data.values || []).map(r => (r[0] || '').trim()).filter(Boolean))];
+      return res.status(200).json({ urls });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
