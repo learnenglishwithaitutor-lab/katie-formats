@@ -372,13 +372,19 @@ export default async function handler(req, res) {
   //
   // Returns bare URLs rather than full rows: the caller only needs to know
   // "seen or not", and the tab is append-only so it grows forever.
+  // With ?full=1 it returns every column instead, header row included — that
+  // is the backup route, so a copy of the decisions can be committed to the
+  // repo rather than existing only in one Google Sheet.
   if (action === 'readdecisions') {
     try {
       const token = await getAccessToken();
+      const full = req.query.full === '1';
+      const range = full ? 'Decisions!A1:L20000' : 'Decisions!B2:B20000';
       const data = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Decisions!B2:B20000`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`,
         { headers: { Authorization: `Bearer ${token}` } }
       ).then(r => r.json());
+      if (full) return res.status(200).json({ rows: data.values || [] });
       const urls = [...new Set((data.values || []).map(r => (r[0] || '').trim()).filter(Boolean))];
       return res.status(200).json({ urls });
     } catch (err) {
